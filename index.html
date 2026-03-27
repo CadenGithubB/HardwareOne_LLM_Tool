@@ -314,7 +314,7 @@
         <input type="file" id="folder-input" webkitdirectory multiple>
         <span class="dropzone-icon">📂</span>
         <div class="dropzone-label">Drop model folder here</div>
-        <div class="dropzone-sub">config.json · tokenizer.json · *.safetensors</div>
+        <div class="dropzone-sub">config.json · tokenizer.json · *.safetensors or pytorch_model.bin</div>
       </div>
       <div class="or-divider">or fetch from HuggingFace</div>
       <div class="hf-row">
@@ -324,8 +324,7 @@
       </div>
       <div style="font-size:11px;color:var(--muted);margin-top:8px;">
         Tip: Try <code style="font-family:var(--mono);color:var(--accent-strong)">HuggingFaceTB/SmolLM-135M</code>
-        (Llama-arch, ~270 MB). Models with only pytorch_model.bin: run
-        <code style="font-family:var(--mono);color:var(--accent-strong)">python convert.py &lt;model-id&gt;</code> first.
+        (Llama-arch, ~270 MB). PyTorch-only repos are fetched or parsed here in the browser—no separate tools.
       </div>
     </div>
   </div>
