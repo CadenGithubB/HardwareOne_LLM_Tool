@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32-S3 LLM Converter</title>
+  <style>
+    :root {
+      --bg:       #08080e;
+      --surface:  #10101a;
+      --panel:    #16162040;
+      --border:   #25253a;
+      --text:     #d8d8f0;
+      --muted:    #5a5a80;
+      --accent:   #7c6af7;
+      --accent2:  #4fc3f7;
+      --green:    #4caf50;
+      --orange:   #ff9800;
+      --red:      #ef5350;
+      --mono:     'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+      min-height: 100vh;
+      padding: 0 0 60px;
+    }
+
+    /* ── Top bar ── */
+    .topbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 32px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .topbar-logo {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .topbar-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .topbar-sub {
+      font-size: 12px;
+      color: var(--muted);
+      margin-left: auto;
+      font-family: var(--mono);
+    }
+
+    /* ── Layout ── */
+    .page {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 32px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #ffffff06;
+    }
+
+    .card-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+    }
+
+    .card-body {
+      padding: 18px;
+    }
+
+    /* ── Step badge ── */
+    .step-badge {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-family: var(--mono);
+    }
+
+    .step-badge.done { background: var(--green); }
+    .step-badge.skip { background: var(--muted); }
+
+    /* ── Drop zone ── */
+    .dropzone {
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      padding: 36px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+      position: relative;
+    }
+
+    .dropzone:hover, .dropzone.dragover {
+      border-color: var(--accent);
+      background: #7c6af710;
+    }
+
+    .dropzone input[type=file] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .dropzone-icon {
+      font-size: 32px;
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .dropzone-label {
+      font-size: 14px;
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .dropzone-sub {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* ── Divider ── */
+    .or-divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 12px;
+      margin: 14px 0;
+    }
+
+    .or-divider::before, .or-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ── Inputs ── */
+    .hf-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    input[type=text] {
+      flex: 1;
+      background: #ffffff08;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 9px 12px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      outline: none;
+      transition: border-color .2s;
+    }
+
+    input[type=text]:focus { border-color: var(--accent); }
+    input[type=text]::placeholder { color: var(--muted); }
+
+    button {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 9px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s, transform .1s;
+      white-space: nowrap;
+    }
+
+    button:hover { opacity: .85; }
+    button:active { transform: scale(.98); }
+    button:disabled { opacity: .35; cursor: default; }
+
+    button.secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    button.secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+    button.big {
+      padding: 13px 32px;
+      font-size: 14px;
+      width: 100%;
+      border-radius: 8px;
+    }
+
+    button.green  { background: var(--green); }
+    button.danger { background: var(--red); }
+
+    /* ── Architecture grid ── */
+    .arch-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px;
+    }
+
+    .arch-item {
+      background: #ffffff06;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+
+    .arch-item label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--muted);
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .arch-item .val {
+      font-family: var(--mono);
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--accent2);
+    }
+
+    /* ── Radio group ── */
+    .radio-group {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .radio-option {
+      position: relative;
+    }
+
+    .radio-option input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .radio-option label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: border-color .15s, background .15s;
+      user-select: none;
+    }
+
+    .radio-option input:checked + label {
+      border-color: var(--accent);
+      background: #7c6af718;
+      color: var(--accent);
+    }
+
+    .radio-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+    }
+
+    .radio-option input:checked + label .radio-dot {
+      background: var(--accent);
+    }
+
+    /* ── Settings row ── */
+    .settings-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+
+    .settings-row label {
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    select {
+      background: #ffffff08;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px 10px;
+      color: var(--text);
+      font-size: 13px;
+      font-family: var(--mono);
+      outline: none;
+      cursor: pointer;
+    }
+
+    select:focus { border-color: var(--accent); }
+
+    /* ── Size estimate badge ── */
+    .size-estimate {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    .size-pill {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-weight: 700;
+      font-size: 12px;
+    }
+
+    .size-pill.ok      { background: #4caf5022; color: var(--green); border: 1px solid #4caf5040; }
+    .size-pill.warn    { background: #ff980022; color: var(--orange); border: 1px solid #ff980040; }
+    .size-pill.over    { background: #ef535022; color: var(--red); border: 1px solid #ef535040; }
+
+    /* ── Progress ── */
+    .progress-wrap {
+      margin-top: 4px;
+    }
+
+    .progress-bar-track {
+      background: #ffffff10;
+      border-radius: 4px;
+      height: 6px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: 4px;
+      transition: width .3s ease;
+      width: 0%;
+    }
+
+    .progress-label {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* ── Log ── */
+    .log {
+      background: #000000a0;
+      border-radius: 6px;
+      padding: 12px 14px;
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.7;
+      max-height: 180px;
+      overflow-y: auto;
+      color: var(--muted);
+      margin-top: 12px;
+    }
+
+    .log .ok   { color: var(--green); }
+    .log .warn { color: var(--orange); }
+    .log .err  { color: var(--red); }
+    .log .info { color: var(--accent2); }
+
+    /* ── Download card ── */
+    .download-info {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background: #4caf5010;
+      border: 1px solid #4caf5030;
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+    }
+
+    .download-icon { font-size: 28px; }
+
+    .download-name {
+      font-family: var(--mono);
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--green);
+    }
+
+    .download-meta {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .upload-instructions {
+      background: #ffffff05;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 14px;
+      font-size: 12px;
+      line-height: 1.8;
+      color: var(--muted);
+    }
+
+    .upload-instructions code {
+      font-family: var(--mono);
+      color: var(--accent2);
+      background: #ffffff0a;
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+
+    /* ── Hidden ── */
+    .hidden { display: none !important; }
+
+    /* ── Status dot ── */
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    .dot-idle    { background: var(--muted); }
+    .dot-active  { background: var(--orange); animation: pulse 1.2s ease-in-out infinite; }
+    .dot-done    { background: var(--green); }
+    .dot-error   { background: var(--red); }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: .3; }
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      .page { padding: 16px 12px; }
+      .topbar { padding: 12px 16px; }
+      .topbar-sub { display: none; }
+      .arch-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Top bar -->
+<header class="topbar">
+  <span class="topbar-logo">ESP32-S3</span>
+  <span class="topbar-title">LLM Model Converter</span>
+  <span class="topbar-sub">HuggingFace → INT8 binary for on-device inference</span>
+</header>
+
+<main class="page">
+
+  <!-- ── Step 1: Source ── -->
+  <div class="card" id="card-source">
+    <div class="card-header">
+      <span class="step-badge" id="badge-source">1</span>
+      <span class="card-title">Model Source</span>
+    </div>
+    <div class="card-body">
+      <div class="dropzone" id="dropzone">
+        <input type="file" id="folder-input" webkitdirectory multiple accept="">
+        <span class="dropzone-icon">📂</span>
+        <div class="dropzone-label">Drop model folder here</div>
+        <div class="dropzone-sub">config.json · tokenizer.json · *.safetensors</div>
+      </div>
+
+      <div class="or-divider">or fetch from HuggingFace</div>
+
+      <div class="hf-row">
+        <input type="text" id="hf-input"
+          placeholder="e.g. roneneldan/TinyStories-33M"
+          autocomplete="off" spellcheck="false">
+        <button id="hf-fetch-btn" onclick="fetchFromHF()">Fetch</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px;">
+        Tip: Start with <code style="font-family:var(--mono);color:var(--accent2)">roneneldan/TinyStories-1M</code>
+        (~5 MB) to verify the full pipeline.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Step 2: Architecture ── -->
+  <div class="card hidden" id="card-arch">
+    <div class="card-header">
+      <span class="step-badge" id="badge-arch">2</span>
+      <span class="card-title">Detected Architecture</span>
+      <span id="arch-model-name" style="font-size:12px;color:var(--accent2);margin-left:auto;font-family:var(--mono);"></span>
+    </div>
+    <div class="card-body">
+      <div class="arch-grid" id="arch-grid"></div>
+    </div>
+  </div>
+
+  <!-- ── Step 3: Settings ── -->
+  <div class="card hidden" id="card-settings">
+    <div class="card-header">
+      <span class="step-badge" id="badge-settings">3</span>
+      <span class="card-title">Quantization Settings</span>
+    </div>
+    <div class="card-body">
+
+      <div class="radio-group" id="quant-radio">
+        <div class="radio-option">
+          <input type="radio" name="quant" id="q-int8" value="int8" checked>
+          <label for="q-int8">
+            <span class="radio-dot"></span>INT8
+            <span style="font-size:11px;color:var(--muted);margin-left:4px;">4× smaller</span>
+          </label>
+        </div>
+        <div class="radio-option">
+          <input type="radio" name="quant" id="q-f32" value="f32">
+          <label for="q-f32">
+            <span class="radio-dot"></span>F32
+            <span style="font-size:11px;color:var(--muted);margin-left:4px;">full precision</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="settings-row">
+        <label for="group-select">Group size</label>
+        <select id="group-select">
+          <option value="32">32</option>
+          <option value="64">64</option>
+          <option value="128" selected>128</option>
+          <option value="256">256</option>
+        </select>
+
+        <label for="partition-input" style="margin-left:8px;">LittleFS size (KB)</label>
+        <input type="text" id="partition-input" value="3804"
+          style="width:80px;flex:none;" oninput="updateEstimate()">
+
+        <div class="size-estimate" id="size-estimate"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Step 4: Convert ── -->
+  <div class="card hidden" id="card-convert">
+    <div class="card-header">
+      <span class="step-badge" id="badge-convert">4</span>
+      <span class="card-title">Convert</span>
+      <span id="convert-status-dot" class="status-dot dot-idle" style="margin-left:auto;"></span>
+    </div>
+    <div class="card-body">
+      <button class="big" id="convert-btn" onclick="startConversion()" disabled>
+        Convert &amp; Download
+      </button>
+
+      <div class="progress-wrap hidden" id="progress-wrap">
+        <div style="height:12px;"></div>
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill" id="progress-fill"></div>
+        </div>
+        <div class="progress-label" id="progress-label">Preparing…</div>
+      </div>
+
+      <div class="log hidden" id="log"></div>
+    </div>
+  </div>
+
+  <!-- ── Step 5: Download ── -->
+  <div class="card hidden" id="card-download">
+    <div class="card-header">
+      <span class="step-badge done" id="badge-download">✓</span>
+      <span class="card-title">Ready to Flash</span>
+    </div>
+    <div class="card-body">
+      <div class="download-info">
+        <span class="download-icon">💾</span>
+        <div>
+          <div class="download-name" id="dl-filename">model.bin</div>
+          <div class="download-meta" id="dl-meta"></div>
+        </div>
+        <button class="green" style="margin-left:auto;" id="dl-btn">Download</button>
+      </div>
+
+      <div class="upload-instructions">
+        <strong style="color:var(--text);">Upload to device:</strong><br>
+        1. Open the <strong>Files</strong> page on your HardwareOne device<br>
+        2. Navigate to (or create) <code>/system/llm/</code><br>
+        3. Upload the downloaded <code>model.bin</code><br>
+        4. In the <strong>CLI</strong> tab: <code>llm load</code> → <code>llm generate Once upon a time</code>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script type="module">
+import { parseSafetensors }                         from './safetensors.js';
+import { parseTokenizerJson, encodeTokenizerBinary, tokenizerStats } from './tokenizer.js';
+import { buildOutputBin, estimateSize, QUANT }      from './format.js';
+
+// ── State ──────────────────────────────────────────────────────────────────
+const state = {
+  files:      null,   // FileList or synthetic array
+  config:     null,   // parsed config.json
+  tokenizer:  null,   // parsed tokenizer
+  stFiles:    [],     // safetensors file objects, in order
+  ready:      false,
+  blob:       null,
+};
+
+// ── Drag & Drop ────────────────────────────────────────────────────────────
+const dz = document.getElementById('dropzone');
+dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('dragover'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  dz.classList.remove('dragover');
+  handleFiles([...e.dataTransfer.files]);
+});
+
+document.getElementById('folder-input').addEventListener('change', e => {
+  handleFiles([...e.target.files]);
+});
+
+// ── Quant / group changes update estimate ──────────────────────────────────
+document.querySelectorAll('input[name=quant]').forEach(r =>
+  r.addEventListener('change', updateEstimate));
+document.getElementById('group-select').addEventListener('change', updateEstimate);
+
+// ── File handling ──────────────────────────────────────────────────────────
+async function handleFiles(files) {
+  log('info', `Received ${files.length} files`);
+
+  const byName = {};
+  for (const f of files) {
+    const name = f.name.toLowerCase();
+    // Use relative path key when available (from directory picker)
+    const key = (f.webkitRelativePath || f.name).replace(/\\/g, '/');
+    byName[name] = f;
+    byName[key]  = f;
+  }
+
+  // Find config.json
+  const configFile = findFile(byName, ['config.json']);
+  if (!configFile) { log('err', 'config.json not found'); return; }
+
+  // Find tokenizer.json
+  const tokFile = findFile(byName, ['tokenizer.json']);
+  if (!tokFile) { log('warn', 'tokenizer.json not found — tokenizer block will be empty'); }
+
+  // Find safetensors files
+  const stFiles = files
+    .filter(f => f.name.endsWith('.safetensors'))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  if (stFiles.length === 0) { log('err', 'No .safetensors files found'); return; }
+  log('ok', `Found ${stFiles.length} safetensors shard(s)`);
+
+  try {
+    // Parse config
+    const configJson = JSON.parse(await configFile.text());
+    state.config = normalizeConfig(configJson);
+    log('ok', `Architecture: dim=${state.config.dim} layers=${state.config.n_layers} heads=${state.config.n_heads}`);
+    renderArch(state.config, configJson.model_type ?? 'unknown');
+
+    // Parse tokenizer
+    if (tokFile) {
+      const tokJson = JSON.parse(await tokFile.text());
+      state.tokenizer = parseTokenizerJson(tokJson);
+      const stats = tokenizerStats(state.tokenizer);
+      log('ok', `Tokenizer: vocab_size=${stats.vocabSize} merges=${stats.mergeCount}`);
+    }
+
+    state.stFiles = stFiles;
+    state.ready   = true;
+
+    show('card-arch');
+    show('card-settings');
+    show('card-convert');
+    updateEstimate();
+    document.getElementById('convert-btn').disabled = false;
+    document.getElementById('badge-source').classList.add('done');
+
+  } catch (err) {
+    log('err', `Parse error: ${err.message}`);
+    console.error(err);
+  }
+}
+
+function findFile(byName, candidates) {
+  for (const c of candidates) {
+    if (byName[c]) return byName[c];
+    // Search with any path prefix
+    for (const k of Object.keys(byName)) {
+      if (k.endsWith('/' + c) || k === c) return byName[k];
+    }
+  }
+  return null;
+}
+
+// ── HuggingFace fetch ──────────────────────────────────────────────────────
+window.fetchFromHF = async function () {
+  const modelId = document.getElementById('hf-input').value.trim();
+  if (!modelId) return;
+
+  const btn = document.getElementById('hf-fetch-btn');
+  btn.disabled = true;
+  btn.textContent = 'Fetching…';
+  log('info', `Fetching ${modelId} from HuggingFace…`);
+
+  try {
+    const base = `https://huggingface.co/${modelId}/resolve/main`;
+    const synthetic = [];
+
+    // Fetch config.json
+    const configResp = await fetch(`${base}/config.json`);
+    if (!configResp.ok) throw new Error(`config.json: HTTP ${configResp.status}`);
+    const configBlob = await configResp.blob();
+    synthetic.push(new File([configBlob], 'config.json'));
+    log('ok', 'config.json ✓');
+
+    // Fetch tokenizer.json
+    const tokResp = await fetch(`${base}/tokenizer.json`);
+    if (tokResp.ok) {
+      synthetic.push(new File([await tokResp.blob()], 'tokenizer.json'));
+      log('ok', 'tokenizer.json ✓');
+    } else {
+      log('warn', 'tokenizer.json not found');
+    }
+
+    // Check for multi-shard index
+    const idxResp = await fetch(`${base}/model.safetensors.index.json`);
+    if (idxResp.ok) {
+      const idx = await idxResp.json();
+      const shards = [...new Set(Object.values(idx.weight_map))].sort();
+      log('info', `Multi-shard model: ${shards.length} shards`);
+      for (const shard of shards) {
+        log('info', `Downloading ${shard}…`);
+        const r = await fetch(`${base}/${shard}`);
+        if (!r.ok) throw new Error(`${shard}: HTTP ${r.status}`);
+        synthetic.push(new File([await r.blob()], shard));
+        log('ok', `${shard} ✓`);
+      }
+    } else {
+      // Single shard
+      log('info', 'Downloading model.safetensors…');
+      const r = await fetch(`${base}/model.safetensors`);
+      if (!r.ok) throw new Error(`model.safetensors: HTTP ${r.status}`);
+      synthetic.push(new File([await r.blob()], 'model.safetensors'));
+      log('ok', 'model.safetensors ✓');
+    }
+
+    await handleFiles(synthetic);
+
+  } catch (err) {
+    log('err', `HuggingFace fetch failed: ${err.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Fetch';
+  }
+};
+
+// ── Config normalisation ───────────────────────────────────────────────────
+function normalizeConfig(c) {
+  return {
+    dim:        c.hidden_size       ?? c.dim       ?? 0,
+    hidden_dim: c.intermediate_size ?? c.hidden_dim ?? 0,
+    n_layers:   c.num_hidden_layers  ?? c.n_layers  ?? 0,
+    n_heads:    c.num_attention_heads ?? c.n_heads  ?? 0,
+    n_kv_heads: c.num_key_value_heads ?? c.n_heads  ?? 0,
+    vocab_size: c.vocab_size         ?? 0,
+    seq_len:    c.max_position_embeddings ?? c.seq_len ?? 2048,
+  };
+}
+
+// ── Architecture display ───────────────────────────────────────────────────
+function renderArch(cfg, modelType) {
+  document.getElementById('arch-model-name').textContent = modelType;
+  const paramCount = estimateParams(cfg);
+
+  const items = [
+    ['dim',       cfg.dim],
+    ['hidden',    cfg.hidden_dim],
+    ['layers',    cfg.n_layers],
+    ['heads',     cfg.n_heads],
+    ['kv heads',  cfg.n_kv_heads],
+    ['vocab',     cfg.vocab_size],
+    ['seq len',   cfg.seq_len],
+    ['params',    fmtParams(paramCount)],
+  ];
+
+  const grid = document.getElementById('arch-grid');
+  grid.innerHTML = items.map(([label, val]) => `
+    <div class="arch-item">
+      <label>${label}</label>
+      <div class="val">${val}</div>
+    </div>`).join('');
+}
+
+function estimateParams(cfg) {
+  const { dim, hidden_dim, n_layers, n_heads, n_kv_heads, vocab_size } = cfg;
+  const head_dim = dim / n_heads;
+  const kv_dim   = n_kv_heads * head_dim;
+  let p = vocab_size * dim;                         // embedding
+  p += n_layers * (
+    dim +                                           // attn_norm
+    dim * dim +                                     // q
+    kv_dim * dim +                                  // k
+    kv_dim * dim +                                  // v
+    dim * dim +                                     // o
+    dim +                                           // ffn_norm
+    hidden_dim * dim * 3                            // gate + up + down
+  );
+  p += dim;                                         // final norm
+  return p;
+}
+
+function fmtParams(n) {
+  if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(0) + 'K';
+  return String(n);
+}
+
+// ── Size estimate ──────────────────────────────────────────────────────────
+window.updateEstimate = function () {
+  if (!state.config) return;
+
+  const quantType  = document.querySelector('input[name=quant]:checked').value === 'int8'
+    ? QUANT.INT8 : QUANT.F32;
+  const groupSize  = parseInt(document.getElementById('group-select').value, 10);
+  const partitionKB = parseInt(document.getElementById('partition-input').value, 10) || 3804;
+  const tokBufSize = state.tokenizer
+    ? state.tokenizer.vocabSize * 12 + state.tokenizer.merges.length * 12
+    : 0;
+
+  const bytes = estimateSize({ config: state.config, tokBufSize, quantType, groupSize });
+  const kb    = (bytes / 1024).toFixed(0);
+  const pct   = ((bytes / (partitionKB * 1024)) * 100).toFixed(0);
+  const cls   = bytes > partitionKB * 1024 ? 'over' : bytes > partitionKB * 1024 * 0.9 ? 'warn' : 'ok';
+  const icon  = cls === 'over' ? '⚠ too large' : cls === 'warn' ? '⚠ tight' : '✓ fits';
+
+  document.getElementById('size-estimate').innerHTML =
+    `<span style="color:var(--muted);">~${kb} KB (${pct}%)</span>` +
+    `<span class="size-pill ${cls}">${icon}</span>`;
+};
+
+// ── Conversion ────────────────────────────────────────────────────────────
+window.startConversion = async function () {
+  if (!state.ready) return;
+
+  const quantType = document.querySelector('input[name=quant]:checked').value === 'int8'
+    ? QUANT.INT8 : QUANT.F32;
+  const groupSize = parseInt(document.getElementById('group-select').value, 10);
+
+  document.getElementById('convert-btn').disabled = true;
+  show('progress-wrap');
+  show('log');
+  setDot('active');
+  log('info', `Starting conversion — quant=${quantType === QUANT.INT8 ? 'int8' : 'f32'} groupSize=${groupSize}`);
+
+  try {
+    // Collect all tensors from all shards
+    progress(0, 'Loading safetensors…');
+    const allTensors = {};
+    for (let si = 0; si < state.stFiles.length; si++) {
+      log('info', `Parsing shard ${si + 1}/${state.stFiles.length}: ${state.stFiles[si].name}`);
+      const st = await parseSafetensors(state.stFiles[si]);
+      for (const name of st.names) {
+        allTensors[name] = { st, name };
+      }
+    }
+    log('ok', `Total tensors found: ${Object.keys(allTensors).length}`);
+
+    // Helper: get a tensor as Float32Array
+    async function getTensor(name) {
+      const entry = allTensors[name];
+      if (!entry) return null;
+      return entry.st.getTensor(entry.name);
+    }
+
+    // Helper: quantize a tensor via worker
+    const worker = new Worker('./worker.js');
+    function quantizeTensor(name, f32, isNorm) {
+      return new Promise((resolve, reject) => {
+        worker.onmessage = ({ data }) => {
+          if (data.type === 'done') resolve(data);
+          else reject(new Error(data.error));
+        };
+        worker.onerror = reject;
+        worker.postMessage({ type: 'quantize', name, tensor: f32, groupSize, isNorm },
+          [f32.buffer]);
+      });
+    }
+
+    // Embedding table
+    progress(5, 'Loading embedding table…');
+    const embedName = 'model.embed_tokens.weight';
+    const embedRaw  = await getTensor(embedName);
+    if (!embedRaw) throw new Error(`Missing: ${embedName}`);
+    log('ok', `Embedding table: ${embedRaw.length} elements`);
+
+    // Tokenizer
+    const tokBuf = state.tokenizer
+      ? encodeTokenizerBinary(state.tokenizer)
+      : new ArrayBuffer(8); // empty placeholder
+
+    // Layers
+    const layers = [];
+    const LAYER_WEIGHT_KEYS = {
+      attn_norm: n => `model.layers.${n}.input_layernorm.weight`,
+      q:         n => `model.layers.${n}.self_attn.q_proj.weight`,
+      k:         n => `model.layers.${n}.self_attn.k_proj.weight`,
+      v:         n => `model.layers.${n}.self_attn.v_proj.weight`,
+      o:         n => `model.layers.${n}.self_attn.o_proj.weight`,
+      ffn_norm:  n => `model.layers.${n}.post_attention_layernorm.weight`,
+      gate:      n => `model.layers.${n}.mlp.gate_proj.weight`,
+      up:        n => `model.layers.${n}.mlp.up_proj.weight`,
+      down:      n => `model.layers.${n}.mlp.down_proj.weight`,
+    };
+    const NORM_KEYS = new Set(['attn_norm', 'ffn_norm']);
+
+    const nLayers = state.config.n_layers;
+    for (let li = 0; li < nLayers; li++) {
+      const pct = 10 + Math.round((li / nLayers) * 80);
+      progress(pct, `Quantizing layer ${li + 1}/${nLayers}…`);
+
+      const layer = {};
+      for (const [key, nameFn] of Object.entries(LAYER_WEIGHT_KEYS)) {
+        const tname = nameFn(li);
+        const f32   = await getTensor(tname);
+        if (!f32) throw new Error(`Missing tensor: ${tname}`);
+        const isNorm = NORM_KEYS.has(key) || quantType === QUANT.F32;
+        const result = await quantizeTensor(tname, f32, isNorm);
+        layer[key] = result.mode === 'int8'
+          ? { mode: 'int8', scales: result.scales, quant: result.quant }
+          : { mode: 'f32',  data:   result.data };
+      }
+      layers.push(layer);
+    }
+    worker.terminate();
+
+    // Final norm
+    progress(92, 'Final norm…');
+    const finalNorm = await getTensor('model.norm.weight');
+    if (!finalNorm) throw new Error('Missing: model.norm.weight');
+
+    // LM head (check if tied to embedding)
+    progress(94, 'LM head…');
+    const lmHeadRaw = await getTensor('lm_head.weight');
+    let lmHead;
+    if (!lmHeadRaw) {
+      log('info', 'lm_head not found — assuming tied to embedding');
+      lmHead = { tied: true };
+    } else {
+      lmHead = { tied: false, mode: 'f32', data: lmHeadRaw };
+    }
+
+    // Build output
+    progress(97, 'Packing binary…');
+    log('info', 'Building output binary…');
+
+    const blob = buildOutputBin({
+      config: state.config,
+      tokBuf,
+      embedData: embedRaw,
+      layers,
+      finalNorm,
+      lmHead,
+      quantType,
+      groupSize,
+    });
+
+    state.blob = blob;
+    const sizeMB = (blob.size / 1024 / 1024).toFixed(2);
+    log('ok', `Done! Output size: ${sizeMB} MB (${blob.size.toLocaleString()} bytes)`);
+
+    progress(100, 'Complete');
+    setDot('done');
+    showDownload(blob, sizeMB);
+
+  } catch (err) {
+    log('err', `Conversion failed: ${err.message}`);
+    console.error(err);
+    setDot('error');
+    document.getElementById('convert-btn').disabled = false;
+  }
+};
+
+function showDownload(blob, sizeMB) {
+  const url      = URL.createObjectURL(blob);
+  const filename = 'model.bin';
+  document.getElementById('dl-filename').textContent = filename;
+  document.getElementById('dl-meta').textContent =
+    `${sizeMB} MB · INT8 quantized · ESP32-S3 LLM format v1`;
+
+  const dlBtn = document.getElementById('dl-btn');
+  dlBtn.onclick = () => {
+    const a = document.createElement('a');
+    a.href     = url;
+    a.download = filename;
+    a.click();
+  };
+
+  show('card-download');
+  document.getElementById('card-download').scrollIntoView({ behavior: 'smooth' });
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function show(id)  { document.getElementById(id).classList.remove('hidden'); }
+function hide(id)  { document.getElementById(id).classList.add('hidden'); }
+
+function setDot(state) {
+  const dot = document.getElementById('convert-status-dot');
+  dot.className = `status-dot dot-${state}`;
+}
+
+function progress(pct, label) {
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-label').textContent = label;
+}
+
+function log(level, msg) {
+  const logEl = document.getElementById('log');
+  logEl.classList.remove('hidden');
+  const line     = document.createElement('div');
+  const prefix   = { ok: '✓', warn: '⚠', err: '✗', info: '›' }[level] ?? '›';
+  line.className = level;
+  line.textContent = `${prefix} ${msg}`;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+// Expose globals for any future inline handlers
+window.__llmConverter = { ready: true };
+</script>
+
+</body>
+</html>
