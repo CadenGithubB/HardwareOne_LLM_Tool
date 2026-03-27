@@ -119,7 +119,7 @@ def main() -> None:
 
     if args.text:
         text_paths = [args.text.resolve()]
-        ds_raw, _ = load_text_dataset(args)
+        _, ds_raw = load_text_dataset(args)
     else:
         _, hf_train = load_text_dataset(args)
         chunk_path = out_dir / "_train_corpus.txt"
@@ -201,7 +201,6 @@ def main() -> None:
     use_cuda = torch.cuda.is_available()
     training_args = TrainingArguments(
         output_dir=str(out_dir / "trainer_ckpt"),
-        overwrite_output_dir=True,
         num_train_epochs=args.epochs,
         per_device_train_batch_size=args.batch_size,
         learning_rate=args.lr,
