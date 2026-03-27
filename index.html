@@ -855,25 +855,37 @@ async function startConversion() {
       return st.getTensor(name);
     }
 
-    // ── Worker for quantization ──
-    const workerUrl = new URL('worker.js', window.location.href).href;
-    console.log('[app] worker URL:', workerUrl);
-    const worker = new Worker(workerUrl);
+    // ── Worker pool — one worker per logical CPU core ──
+    const workerUrl  = new URL('worker.js', window.location.href).href;
+    const numWorkers = Math.max(2, Math.min(navigator.hardwareConcurrency ?? 4, 16));
+    console.log('[app] worker pool: ' + numWorkers + ' threads (hardwareConcurrency=' + (navigator.hardwareConcurrency ?? '?') + ')');
+    uiLog('info', 'Worker pool: ' + numWorkers + ' threads');
 
+    const _workers = Array.from({ length: numWorkers }, () => new Worker(workerUrl));
+    const _free    = [..._workers];   // idle workers
+    const _queue   = [];              // pending tasks
+
+    function _poolRun(w, task) {
+      w.onerror   = e => { task.reject(new Error('Worker: ' + e.message)); _poolNext(w); };
+      w.onmessage = ({ data }) => {
+        if (data.type === 'done') task.resolve(data);
+        else task.reject(new Error(data.error ?? 'worker error'));
+        _poolNext(w);
+      };
+      w.postMessage({ type: 'quantize', name: task.name, tensor: task.f32, groupSize, isNorm: task.isNorm }, [task.f32.buffer]);
+    }
+    function _poolNext(w) {
+      if (_queue.length > 0) _poolRun(w, _queue.shift());
+      else _free.push(w);
+    }
     function quantizeTensor(name, f32, isNorm) {
       return new Promise((resolve, reject) => {
-        console.log(`[app] quantize ${name}: ${f32.length} elements isNorm=${isNorm}`);
-        worker.onmessage = ({ data }) => {
-          if (data.type === 'done') resolve(data);
-          else reject(new Error(data.error ?? 'worker error'));
-        };
-        worker.onerror = e => {
-          console.error('[app] worker error:', e);
-          reject(new Error('Worker error: ' + e.message));
-        };
-        worker.postMessage({ type: 'quantize', name, tensor: f32, groupSize, isNorm }, [f32.buffer]);
+        const task = { name, f32, isNorm, resolve, reject };
+        if (_free.length > 0) _poolRun(_free.pop(), task);
+        else _queue.push(task);
       });
     }
+    function terminatePool() { _workers.forEach(w => w.terminate()); }
 
     const isGPT2 = state.config.arch_type === 1;
     uiLog('info', 'Architecture: ' + (isGPT2 ? 'GPT-2' : 'Llama-style'));
@@ -901,89 +913,84 @@ async function startConversion() {
       const layer = {};
 
       if (isGPT2) {
-        // ── GPT-2 layer ─────────────────────────────────────────────
+        // ── GPT-2 layer — load all 6 matrices in parallel, then quantize all in parallel ──
         const L = `transformer.h.${li}`;
-
-        // Attention norms
-        const attnNorm = await getTensor(`${L}.ln_1.weight`);
-        if (!attnNorm) throw new Error(`Missing: ${L}.ln_1.weight`);
-        layer.attn_norm = { mode: 'f32', data: attnNorm };
-
-        // QKV: split c_attn.weight [dim, 3*dim] → q, k, v [dim, dim] (transposed)
-        const cAttn = await getTensor(`${L}.attn.c_attn.weight`);
-        if (!cAttn) throw new Error(`Missing: ${L}.attn.c_attn.weight`);
-        const { q: qRaw, k: kRaw, v: vRaw } = splitGPT2QKV(cAttn, dim);
-        const kv_dim = state.config.n_kv_heads * Math.floor(dim / state.config.n_heads);
-
-        // For standard GPT-2 (no GQA), kv_dim === dim, so no reshape needed
-        const [qRes, kRes, vRes] = await Promise.all([
-          quantizeTensor(`${L}.q`, qRaw, false),
-          quantizeTensor(`${L}.k`, kRaw, false),
-          quantizeTensor(`${L}.v`, vRaw, false),
-        ]);
-        layer.q = qRes.mode === 'int8' ? { mode:'int8', scales:qRes.scales, quant:qRes.quant } : { mode:'f32', data:qRes.data };
-        layer.k = kRes.mode === 'int8' ? { mode:'int8', scales:kRes.scales, quant:kRes.quant } : { mode:'f32', data:kRes.data };
-        layer.v = vRes.mode === 'int8' ? { mode:'int8', scales:vRes.scales, quant:vRes.quant } : { mode:'f32', data:vRes.data };
-
-        // Output projection: c_proj is [dim, dim] Conv1D → transpose to [dim, dim]
-        const cProjRaw = await getTensor(`${L}.attn.c_proj.weight`);
-        if (!cProjRaw) throw new Error(`Missing: ${L}.attn.c_proj.weight`);
-        const cProjT  = transposeF32(cProjRaw, dim, dim);
-        const oRes    = await quantizeTensor(`${L}.o`, cProjT, false);
-        layer.o = oRes.mode === 'int8' ? { mode:'int8', scales:oRes.scales, quant:oRes.quant } : { mode:'f32', data:oRes.data };
-
-        // FFN norm
-        const ffnNorm = await getTensor(`${L}.ln_2.weight`);
-        if (!ffnNorm) throw new Error(`Missing: ${L}.ln_2.weight`);
-        layer.ffn_norm = { mode: 'f32', data: ffnNorm };
-
-        // GPT-2 FFN: c_fc [dim, 4*dim] + c_proj [4*dim, dim] — no gate
-        // gate slot: dummy 1-element zero (inference engine checks arch_type and skips)
-        layer.gate = { mode: 'f32', data: new Float32Array([0]) };
-
         const hiddenDim = state.config.hidden_dim;
-        const cFcRaw  = await getTensor(`${L}.mlp.c_fc.weight`);
-        if (!cFcRaw) throw new Error(`Missing: ${L}.mlp.c_fc.weight`);
-        const cFcT    = transposeF32(cFcRaw, dim, hiddenDim);   // [dim,hidden]→[hidden,dim]
-        const upRes   = await quantizeTensor(`${L}.up`, cFcT, false);
-        layer.up = upRes.mode === 'int8' ? { mode:'int8', scales:upRes.scales, quant:upRes.quant } : { mode:'f32', data:upRes.data };
 
-        const cMlpProjRaw = await getTensor(`${L}.mlp.c_proj.weight`);
-        if (!cMlpProjRaw) throw new Error(`Missing: ${L}.mlp.c_proj.weight`);
-        const cMlpProjT = transposeF32(cMlpProjRaw, hiddenDim, dim); // [hidden,dim]→[dim,hidden]
-        const downRes   = await quantizeTensor(`${L}.down`, cMlpProjT, false);
-        layer.down = downRes.mode === 'int8' ? { mode:'int8', scales:downRes.scales, quant:downRes.quant } : { mode:'f32', data:downRes.data };
+        const [ln1, cAttn, cProj, ln2, cFc, cMlpProj] = await Promise.all([
+          getTensor(`${L}.ln_1.weight`),
+          getTensor(`${L}.attn.c_attn.weight`),
+          getTensor(`${L}.attn.c_proj.weight`),
+          getTensor(`${L}.ln_2.weight`),
+          getTensor(`${L}.mlp.c_fc.weight`),
+          getTensor(`${L}.mlp.c_proj.weight`),
+        ]);
+        if (!ln1)     throw new Error(`Missing: ${L}.ln_1.weight`);
+        if (!cAttn)   throw new Error(`Missing: ${L}.attn.c_attn.weight`);
+        if (!cProj)   throw new Error(`Missing: ${L}.attn.c_proj.weight`);
+        if (!ln2)     throw new Error(`Missing: ${L}.ln_2.weight`);
+        if (!cFc)     throw new Error(`Missing: ${L}.mlp.c_fc.weight`);
+        if (!cMlpProj) throw new Error(`Missing: ${L}.mlp.c_proj.weight`);
+
+        // Norms stay F32; gate is an unused placeholder for this arch
+        layer.attn_norm = { mode: 'f32', data: ln1 };
+        layer.ffn_norm  = { mode: 'f32', data: ln2 };
+        layer.gate      = { mode: 'f32', data: new Float32Array([0]) };
+
+        // Transform Conv1D [in,out] → [out,in] on main thread (fast), then dispatch all to pool
+        const { q: qRaw, k: kRaw, v: vRaw } = splitGPT2QKV(cAttn, dim);
+        const cProjT  = transposeF32(cProj,    dim,       dim);
+        const cFcT    = transposeF32(cFc,      dim,       hiddenDim);
+        const cMlpT   = transposeF32(cMlpProj, hiddenDim, dim);
+
+        const [qRes, kRes, vRes, oRes, upRes, downRes] = await Promise.all([
+          quantizeTensor(`${L}.q`,    qRaw,    false),
+          quantizeTensor(`${L}.k`,    kRaw,    false),
+          quantizeTensor(`${L}.v`,    vRaw,    false),
+          quantizeTensor(`${L}.o`,    cProjT,  false),
+          quantizeTensor(`${L}.up`,   cFcT,    false),
+          quantizeTensor(`${L}.down`, cMlpT,   false),
+        ]);
+        const toW = r => r.mode === 'int8' ? { mode:'int8', scales:r.scales, quant:r.quant } : { mode:'f32', data:r.data };
+        layer.q = toW(qRes); layer.k = toW(kRes); layer.v = toW(vRes);
+        layer.o = toW(oRes); layer.up = toW(upRes); layer.down = toW(downRes);
 
       } else {
-        // ── Llama-style layer ────────────────────────────────────────
-        const LAYER_KEYS = {
-          attn_norm: i => `model.layers.${i}.input_layernorm.weight`,
-          q:         i => `model.layers.${i}.self_attn.q_proj.weight`,
-          k:         i => `model.layers.${i}.self_attn.k_proj.weight`,
-          v:         i => `model.layers.${i}.self_attn.v_proj.weight`,
-          o:         i => `model.layers.${i}.self_attn.o_proj.weight`,
-          ffn_norm:  i => `model.layers.${i}.post_attention_layernorm.weight`,
-          gate:      i => `model.layers.${i}.mlp.gate_proj.weight`,
-          up:        i => `model.layers.${i}.mlp.up_proj.weight`,
-          down:      i => `model.layers.${i}.mlp.down_proj.weight`,
-        };
+        // ── Llama-style layer — load all 9 tensors in parallel, quantize all in parallel ──
+        const L = `model.layers.${li}`;
         const NORM_KEYS = new Set(['attn_norm', 'ffn_norm']);
+        const TENSOR_MAP = [
+          ['attn_norm', `${L}.input_layernorm.weight`],
+          ['q',         `${L}.self_attn.q_proj.weight`],
+          ['k',         `${L}.self_attn.k_proj.weight`],
+          ['v',         `${L}.self_attn.v_proj.weight`],
+          ['o',         `${L}.self_attn.o_proj.weight`],
+          ['ffn_norm',  `${L}.post_attention_layernorm.weight`],
+          ['gate',      `${L}.mlp.gate_proj.weight`],
+          ['up',        `${L}.mlp.up_proj.weight`],
+          ['down',      `${L}.mlp.down_proj.weight`],
+        ];
 
-        for (const [key, nameFn] of Object.entries(LAYER_KEYS)) {
-          const tname  = nameFn(li);
-          const f32    = await getTensor(tname);
-          if (!f32) throw new Error('Missing: ' + tname);
-          const isNorm = NORM_KEYS.has(key) || quantType === QUANT.F32;
-          const result = await quantizeTensor(tname, f32, isNorm);
-          layer[key]   = result.mode === 'int8'
-            ? { mode: 'int8', scales: result.scales, quant: result.quant }
-            : { mode: 'f32',  data:   result.data };
+        // Load all tensors for this layer simultaneously
+        const rawTensors = await Promise.all(TENSOR_MAP.map(([, tname]) => getTensor(tname)));
+        for (let ti = 0; ti < TENSOR_MAP.length; ti++)
+          if (!rawTensors[ti]) throw new Error('Missing: ' + TENSOR_MAP[ti][1]);
+
+        // Dispatch all to pool at once — pool fills all cores
+        const results = await Promise.all(TENSOR_MAP.map(([key,], ti) =>
+          quantizeTensor(TENSOR_MAP[ti][1], rawTensors[ti], NORM_KEYS.has(key) || quantType === QUANT.F32)
+        ));
+        for (let ti = 0; ti < TENSOR_MAP.length; ti++) {
+          const r = results[ti];
+          layer[TENSOR_MAP[ti][0]] = r.mode === 'int8'
+            ? { mode:'int8', scales:r.scales, quant:r.quant }
+            : { mode:'f32',  data:r.data };
         }
       }
 
       layers.push(layer);
     }
-    worker.terminate();
+    terminatePool();
     uiLog('ok', `All ${nLayers} layers quantized`);
 
     // ── Final norm ──
