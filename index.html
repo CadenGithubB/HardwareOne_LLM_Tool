@@ -350,14 +350,18 @@
         <div class="radio-option">
           <input type="radio" name="quant" id="q-int8" value="int8" checked>
           <label for="q-int8"><span class="radio-dot"></span>INT8
-            <span style="font-size:11px;color:var(--muted);margin-left:4px;">4× smaller</span></label>
+            <span style="font-size:11px;color:var(--muted);margin-left:4px;">weights + FP32 scales</span></label>
         </div>
         <div class="radio-option">
           <input type="radio" name="quant" id="q-f32" value="f32">
           <label for="q-f32"><span class="radio-dot"></span>F32
-            <span style="font-size:11px;color:var(--muted);margin-left:4px;">full precision</span></label>
+            <span style="font-size:11px;color:var(--muted);margin-left:4px;">no weight quantization</span></label>
         </div>
       </div>
+      <p style="font-size:12px;color:var(--muted);margin-top:10px;line-height:1.55;max-width:52em;">
+        Matrix weights use int8; layer norms stay FP32. The file also holds the tokenizer block and headers, so total size is not a fixed multiple of “FP32 model size.” To shrink further: smaller vocabulary / smaller model, or a larger LittleFS partition (KB above).
+        <span style="display:block;margin-top:6px;">This format (v1) only supports FP32 or INT8 weights on device—INT16 would need new firmware.</span>
+      </p>
       <div class="settings-row">
         <label for="group-select">Group size</label>
         <select id="group-select">
