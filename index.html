@@ -664,6 +664,17 @@ console.groupEnd();
 'use strict';
 console.group('[pytorch] module loaded');
 
+/** HF / torch.save uses pytorch_model/…; older checkpoints used archive/… */
+function detectPytorchZipPrefix(zipFiles) {
+  const keys = Object.keys(zipFiles);
+  if (keys.includes('archive/data.pkl')) return 'archive';
+  if (keys.includes('pytorch_model/data.pkl')) return 'pytorch_model';
+  for (const k of keys) {
+    if (k.endsWith('/data.pkl')) return k.slice(0, -'/data.pkl'.length);
+  }
+  return null;
+}
+
 // ── Public entry point — same interface as parseSafetensors ──────────────
 async function parsePytorchBin(file) {
   console.group('[pytorch] parsing', file.name, (file.size/1024/1024).toFixed(2) + ' MB');
@@ -671,8 +682,15 @@ async function parsePytorchBin(file) {
   const zipFiles = unzipPytorch(buf);
   console.log('[pytorch] ZIP entries:', Object.keys(zipFiles).length, Object.keys(zipFiles).join(', '));
 
-  const pkl = zipFiles['archive/data.pkl'];
-  if (!pkl) throw new Error('archive/data.pkl not found — is this a valid pytorch_model.bin?');
+  const prefix = detectPytorchZipPrefix(zipFiles);
+  if (!prefix) {
+    throw new Error('No data.pkl in zip (expected archive/data.pkl or pytorch_model/data.pkl).');
+  }
+  const pklPath = prefix + '/data.pkl';
+  const pkl = zipFiles[pklPath];
+  if (!pkl) throw new Error(pklPath + ' not found — is this a valid pytorch_model.bin?');
+
+  console.log('[pytorch] using zip prefix:', prefix);
 
   const tensors = parseTorchPickle(new Uint8Array(pkl));
   const names   = Object.keys(tensors);
@@ -684,8 +702,8 @@ async function parsePytorchBin(file) {
     async getTensor(name) {
       const t = tensors[name];
       if (!t) { console.warn('[pytorch] missing:', name); return null; }
-      const storage = zipFiles['archive/data/' + t.storageKey];
-      if (!storage) throw new Error('[pytorch] missing storage key: ' + t.storageKey);
+      const storage = zipFiles[prefix + '/data/' + t.storageKey];
+      if (!storage) throw new Error('[pytorch] missing storage key: ' + prefix + '/data/' + t.storageKey);
       const numel  = t.shape.reduce((a, b) => a * b, 1);
       const bpe    = ({ F32:4, F16:2, BF16:2, F64:8, I64:8, I32:4, I16:2, I8:1, U8:1 })[t.dtype] ?? 4;
       const sliced = storage.slice(t.storageOffset * bpe, (t.storageOffset + numel) * bpe);
