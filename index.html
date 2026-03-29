@@ -352,12 +352,7 @@
     <div class="card-body">
       <div class="radio-group" id="quant-radio">
         <div class="radio-option">
-          <input type="radio" name="quant" id="q-int4mix" value="int4mix" checked>
-          <label for="q-int4mix"><span class="radio-dot"></span>INT4/8 Mixed
-            <span style="font-size:11px;color:var(--muted);margin-left:4px;">edge layers INT8, middle layers INT4 — saves ~2 MB PSRAM</span></label>
-        </div>
-        <div class="radio-option">
-          <input type="radio" name="quant" id="q-int8" value="int8">
+          <input type="radio" name="quant" id="q-int8" value="int8" checked>
           <label for="q-int8"><span class="radio-dot"></span>INT8
             <span style="font-size:11px;color:var(--muted);margin-left:4px;">all weights INT8 + FP32 scales</span></label>
         </div>
@@ -647,15 +642,14 @@ console.groupEnd();
 console.group('[format] module loaded');
 
 const MAGIC   = 0x4C4C4D31;
-const QUANT   = { F32: 0, INT8: 1, INT4_MIXED: 2 };
+const QUANT   = { F32: 0, INT8: 1 };
 /** Exposed for console diagnostics from the app script */
 window.__LLM1_FORMAT = { MAGIC, QUANT };
 
-function buildOutputBin({ config, tokBuf, embedData, posEmbedData, layers, finalNorm, finalNormBias, lmHead, quantType, groupSize, nQ8Start, nQ8End, tokenizer }) {
+function buildOutputBin({ config, tokBuf, embedData, posEmbedData, layers, finalNorm, finalNormBias, lmHead, quantType, groupSize, tokenizer }) {
   console.group('[format] buildOutputBin');
   console.log('config:', config, 'quantType:', quantType, 'groupSize:', groupSize);
-  const isMixed = (quantType === QUANT.INT4_MIXED);
-  const fileVersion = isMixed ? 3 : 2;
+  const fileVersion = 2;
   const parts = [];
 
   // Header
@@ -673,14 +667,9 @@ function buildOutputBin({ config, tokBuf, embedData, posEmbedData, layers, final
   dv.setUint32(15, config.vocab_size,  true);
   dv.setUint16(19, config.seq_len,     true);
   dv.setUint8 (21, config.arch_type ?? 0);  // 0=Llama, 1=GPT-2
-  if (isMixed) {
-    dv.setUint8(22, nQ8Start ?? 3);   // INT8 layers at front
-    dv.setUint8(23, nQ8End   ?? 3);   // INT8 layers at back
-  }
-  // bytes 24-63 remain zero (pad)
+  // bytes 22-63 remain zero (pad)
   parts.push(hdr);
-  console.log('[format] header written (64 bytes) version=' + fileVersion + ' arch_type=' + (config.arch_type ?? 0)
-    + (isMixed ? ' nQ8Start=' + (nQ8Start??3) + ' nQ8End=' + (nQ8End??3) : ''));
+  console.log('[format] header written (64 bytes) version=' + fileVersion + ' arch_type=' + (config.arch_type ?? 0));
   {
     const u8 = new Uint8Array(hdr);
     let hex = '';
@@ -703,13 +692,13 @@ function buildOutputBin({ config, tokBuf, embedData, posEmbedData, layers, final
 
   // Embedding (F32 or INT8 — same weight shape as layers)
   const embedN = tensorElements(embedData);
-  parts.push(...tensorBlock(embedN, embedData, isMixed));
+  parts.push(...tensorBlock(embedN, embedData));
   console.log('[format] embedding table:', embedN, 'elements', embedData.mode);
 
   // Positional embedding (GPT-2 / GPT-Neo only)
   if (posEmbedData) {
     const posN = posEmbedData.data.length;
-    parts.push(...tensorBlock(posN, posEmbedData, isMixed));
+    parts.push(...tensorBlock(posN, posEmbedData));
     console.log('[format] positional embedding:', posN, 'elements (FP32)');
   }
 
@@ -724,15 +713,15 @@ function buildOutputBin({ config, tokBuf, embedData, posEmbedData, layers, final
       const w = layers[li][key];
       if (!w) throw new Error(`Layer ${li} missing: ${key}`);
       const n = tensorElements(w);
-      parts.push(...tensorBlock(n, w, isMixed));
+      parts.push(...tensorBlock(n, w));
     }
   }
   console.log('[format] all layers packed');
 
   // Final norm
-  parts.push(...tensorBlock(finalNorm.length, { mode: 'f32', data: finalNorm }, isMixed));
+  parts.push(...tensorBlock(finalNorm.length, { mode: 'f32', data: finalNorm }));
   if (finalNormBias) {
-    parts.push(...tensorBlock(finalNormBias.length, { mode: 'f32', data: finalNormBias }, isMixed));
+    parts.push(...tensorBlock(finalNormBias.length, { mode: 'f32', data: finalNormBias }));
     console.log('[format] final norm bias:', finalNormBias.length, 'elements (FP32)');
   }
 
@@ -743,7 +732,7 @@ function buildOutputBin({ config, tokBuf, embedData, posEmbedData, layers, final
   } else {
     parts.push(new Uint8Array([0]).buffer);
     const n = tensorElements(lmHead);
-    parts.push(...tensorBlock(n, lmHead, isMixed));
+    parts.push(...tensorBlock(n, lmHead));
     console.log('[format] lm_head: separate weight');
   }
 
@@ -765,31 +754,21 @@ function buildOutputBin({ config, tokBuf, embedData, posEmbedData, layers, final
 
 /** Number of logical elements in a weight tensor */
 function tensorElements(w) {
-  if (w.mode === 'int4')      return w.n_elements;
   if (w.mode === 'int8')      return w.quant.length;
   return w.data.length;
 }
 
-/**
- * Serialize a tensor block.  When withPrefix is true (VERSION=3), a 1-byte
- * quant-type prefix is written first so the firmware can dispatch per-tensor.
- */
-function tensorBlock(nElements, w, withPrefix) {
+/** Serialize a tensor block: uint32 element count + payload (scales+quant for INT8, raw f32 for FP32). */
+function tensorBlock(nElements, w) {
   const parts = [];
-  if (withPrefix) {
-    const prefixByte = w.mode === 'int4' ? 2 : w.mode === 'int8' ? 1 : 0;
-    parts.push(new Uint8Array([prefixByte]).buffer);
-  }
   parts.push(new Uint32Array([nElements]).buffer);
-  if (w.mode === 'int4')      { parts.push(w.scales.buffer, w.packed.buffer); }
-  else if (w.mode === 'int8') { parts.push(w.scales.buffer, w.quant.buffer); }
-  else                        { parts.push(w.data.buffer); }
+  if (w.mode === 'int8') { parts.push(w.scales.buffer, w.quant.buffer); }
+  else                   { parts.push(w.data.buffer); }
   return parts;
 }
 
 /** Bytes of payload after the uint32 element-count (matches tensorBlock) */
 function tensorBlockPayloadBytes(w) {
-  if (w.mode === 'int4') return w.scales.byteLength + w.packed.byteLength;
   if (w.mode === 'int8') return w.scales.byteLength + w.quant.byteLength;
   return w.data.byteLength;
 }
@@ -876,7 +855,6 @@ function buildFirmwareManifest(meta) {
     config, tokBuf, embedData, posEmbedData, layers, finalNorm, finalNormBias, lmHead, quantType, groupSize, blobSize,
     tokenizer,
   } = meta;
-  const isMixed = (quantType === QUANT.INT4_MIXED);
   const dim = config.dim, n_heads = config.n_heads, n_kv_heads = config.n_kv_heads;
   const head_dim = Math.floor(dim / n_heads);
   const kv_dim = (n_kv_heads * dim) / n_heads;
@@ -897,9 +875,9 @@ function buildFirmwareManifest(meta) {
   const out = {
     _description: 'ESP32 LLM converter (LLM1) — tensor order and sizes as written to model.bin. Paste for firmware alignment.',
     format_magic_hex: '0x' + MAGIC.toString(16).toUpperCase(),
-    spec_version: isMixed ? 3 : 2,
+    spec_version: 2,
     file_size_bytes: blobSize,
-    global_quant_type: quantType === QUANT.INT4_MIXED ? 'INT4_MIXED' : quantType === QUANT.INT8 ? 'INT8' : 'FP32',
+    global_quant_type: quantType === QUANT.INT8 ? 'INT8' : 'FP32',
     group_size: groupSize,
     derived_geometry: {
       head_dim,
@@ -1620,12 +1598,12 @@ function groupSizeDimWarningMessage(groupSize, dim) {
 }
 
 function groupSizeExceedsDimInt8(quantType, groupSize, dim) {
-  return (quantType === QUANT.INT8 || quantType === QUANT.INT4_MIXED) && groupSize > dim;
+  return quantType === QUANT.INT8 && groupSize > dim;
 }
 
 function _readQuantType() {
   const v = document.querySelector('input[name=quant]:checked').value;
-  return v === 'int4mix' ? QUANT.INT4_MIXED : v === 'int8' ? QUANT.INT8 : QUANT.F32;
+  return v === 'int8' ? QUANT.INT8 : QUANT.F32;
 }
 
 function logGroupSizeVsDimIfNeeded() {
@@ -1693,7 +1671,6 @@ function splitGPT2QKV(cAttn, dim) {
 // ── Verbose console diagnostics (copy entire "[convert] ═══" group for AI / firmware cross-check) ──
 function summarizeWeight(name, w, maxStride) {
   if (!w) return { name, missing: true };
-  if (w.mode === 'int4') return { name, mode: 'int4', n_elements: w.n_elements, scales: w.scales.length };
   const n = tensorElements(w);
   const stride = maxStride || Math.max(1, Math.floor(n / 4096));
   if (w.mode === 'f32') {
@@ -1798,18 +1775,17 @@ async function startConversion() {
   if (!rad) { uiLog('err', 'Select a quantization mode.'); return; }
 
   const quantSel  = rad.value;
-  const quantType = quantSel === 'int4mix' ? QUANT.INT4_MIXED : quantSel === 'int8' ? QUANT.INT8 : QUANT.F32;
-  const isMixedQuant = (quantType === QUANT.INT4_MIXED);
+  const quantType = quantSel === 'int8' ? QUANT.INT8 : QUANT.F32;
   const groupSize = parseInt($('group-select').value, 10);
   const fpRun = quantSel + '|' + groupSize;
 
-  console.group('[app] startConversion quant=' + (isMixedQuant?'int4mix':quantType===QUANT.INT8?'int8':'f32') + ' group=' + groupSize);
+  console.group('[app] startConversion quant=' + (quantType===QUANT.INT8?'int8':'f32') + ' group=' + groupSize);
 
   state.converting = true;
   $('convert-btn').disabled = true;
   show('progress-wrap'); show('log');
   setDot('active');
-  const startQuantLabel = isMixedQuant ? 'int4/8 mixed' : quantType === QUANT.INT8 ? 'int8' : 'f32';
+  const startQuantLabel = quantType === QUANT.INT8 ? 'int8' : 'f32';
   uiLog('info', 'Starting — quant=' + startQuantLabel + ' groupSize=' + groupSize);
   if (groupSizeExceedsDimInt8(quantType, groupSize, state.config.dim))
     uiLog('warn', groupSizeDimWarningMessage(groupSize, state.config.dim));
@@ -1846,35 +1822,13 @@ async function startConversion() {
     const _WORKER_SRC = `
 self.onmessage = function ({ data }) {
   if (data.type !== 'quantize') return;
-  const { name, tensor, groupSize, isNorm, isInt4 } = data;
+  const { name, tensor, groupSize, isNorm } = data;
   if (isNorm) {
     self.postMessage({ type:'done', name, mode:'f32', data:tensor }, [tensor.buffer]);
     return;
   }
   const len = tensor.length, nGroups = Math.ceil(len / groupSize);
   const scales = new Float32Array(nGroups);
-
-  if (isInt4) {
-    // INT4 symmetric [-8, 7] — nibble-packed (low nibble = even, high nibble = odd)
-    const packed = new Uint8Array(Math.ceil(len / 2));
-    for (let g = 0; g < nGroups; g++) {
-      const start = g * groupSize, end = Math.min(start + groupSize, len);
-      let absMax = 0;
-      for (let i = start; i < end; i++) { const v = Math.abs(tensor[i]); if (v > absMax) absMax = v; }
-      const scale = absMax > 0 ? absMax / 7.0 : 1.0;
-      scales[g] = scale;
-      const inv = 1.0 / scale;
-      for (let i = start; i < end; i++) {
-        let q = Math.round(tensor[i] * inv);
-        q = q > 7 ? 7 : q < -8 ? -8 : q;
-        const nibble = q & 0x0F;
-        if (i % 2 === 0) packed[i >> 1] = nibble;
-        else             packed[i >> 1] |= (nibble << 4);
-      }
-    }
-    self.postMessage({ type:'done', name, mode:'int4', scales, packed, n_elements: len }, [scales.buffer, packed.buffer]);
-    return;
-  }
 
   // INT8 symmetric [-128, 127]
   const quant = new Int8Array(len);
@@ -1909,15 +1863,15 @@ self.onmessage = function ({ data }) {
         else task.reject(new Error(data.error ?? 'worker error'));
         _poolNext(w);
       };
-      w.postMessage({ type: 'quantize', name: task.name, tensor: task.f32, groupSize, isNorm: task.isNorm, isInt4: task.isInt4 ?? false }, [task.f32.buffer]);
+      w.postMessage({ type: 'quantize', name: task.name, tensor: task.f32, groupSize, isNorm: task.isNorm }, [task.f32.buffer]);
     }
     function _poolNext(w) {
       if (_queue.length > 0) _poolRun(w, _queue.shift());
       else _free.push(w);
     }
-    function quantizeTensor(name, f32, isNorm, isInt4) {
+    function quantizeTensor(name, f32, isNorm) {
       return new Promise((resolve, reject) => {
-        const task = { name, f32, isNorm, isInt4: isInt4 ?? false, resolve, reject };
+        const task = { name, f32, isNorm, resolve, reject };
         if (_free.length > 0) _poolRun(_free.pop(), task);
         else _queue.push(task);
       });
@@ -1966,14 +1920,9 @@ self.onmessage = function ({ data }) {
     const layers = [];
     const nLayers = state.config.n_layers;
 
-    // Mixed quantization policy: first/last N layers stay INT8, middle → INT4
-    const nQ8Start = isMixedQuant ? 3 : 0;
-    const nQ8End   = isMixedQuant ? 3 : 0;
-
     for (let li = 0; li < nLayers; li++) {
       const pct = 10 + Math.round((li / nLayers) * 80);
-      const layerIsQ4 = isMixedQuant && li >= nQ8Start && li < nLayers - nQ8End;
-      const quantLabel = layerIsQ4 ? 'INT4' : (quantType === QUANT.F32 ? 'FP32' : 'INT8');
+      const quantLabel = quantType === QUANT.F32 ? 'FP32' : 'INT8';
       setProgress(pct, `Quantizing layer ${li+1}/${nLayers} (${quantLabel})…`);
       uiLog('info', `Layer ${li+1}/${nLayers} → ${quantLabel}`);
       const layer = {};
@@ -2011,17 +1960,15 @@ self.onmessage = function ({ data }) {
 
         // nn.Linear weights already [out, in] — no transpose needed
         const forceF32 = quantType === QUANT.F32;
-        const useQ4 = !forceF32 && layerIsQ4;
         const [qRes, kRes, vRes, oRes, upRes, downRes] = await Promise.all([
-          quantizeTensor(`${L}.q`,    qRaw,    forceF32, useQ4),
-          quantizeTensor(`${L}.k`,    kRaw,    forceF32, useQ4),
-          quantizeTensor(`${L}.v`,    vRaw,    forceF32, useQ4),
-          quantizeTensor(`${L}.o`,    oRaw,    forceF32, useQ4),
-          quantizeTensor(`${L}.up`,   fcRaw,   forceF32, useQ4),
-          quantizeTensor(`${L}.down`, projRaw, forceF32, useQ4),
+          quantizeTensor(`${L}.q`,    qRaw,    forceF32),
+          quantizeTensor(`${L}.k`,    kRaw,    forceF32),
+          quantizeTensor(`${L}.v`,    vRaw,    forceF32),
+          quantizeTensor(`${L}.o`,    oRaw,    forceF32),
+          quantizeTensor(`${L}.up`,   fcRaw,   forceF32),
+          quantizeTensor(`${L}.down`, projRaw, forceF32),
         ]);
-        const toW = r => r.mode === 'int4' ? { mode:'int4', scales:r.scales, packed:r.packed, n_elements:r.n_elements }
-                       : r.mode === 'int8' ? { mode:'int8', scales:r.scales, quant:r.quant } : { mode:'f32', data:r.data };
+        const toW = r => r.mode === 'int8' ? { mode:'int8', scales:r.scales, quant:r.quant } : { mode:'f32', data:r.data };
         layer.q = toW(qRes); layer.k = toW(kRes); layer.v = toW(vRes);
         layer.o = toW(oRes); layer.up = toW(upRes); layer.down = toW(downRes);
 
@@ -2061,17 +2008,15 @@ self.onmessage = function ({ data }) {
         const cMlpT   = transposeF32(cMlpProj, hiddenDim, dim);
 
         const forceF32 = quantType === QUANT.F32;
-        const useQ4 = !forceF32 && layerIsQ4;
         const [qRes, kRes, vRes, oRes, upRes, downRes] = await Promise.all([
-          quantizeTensor(`${L}.q`,    qRaw,    forceF32, useQ4),
-          quantizeTensor(`${L}.k`,    kRaw,    forceF32, useQ4),
-          quantizeTensor(`${L}.v`,    vRaw,    forceF32, useQ4),
-          quantizeTensor(`${L}.o`,    cProjT,  forceF32, useQ4),
-          quantizeTensor(`${L}.up`,   cFcT,    forceF32, useQ4),
-          quantizeTensor(`${L}.down`, cMlpT,   forceF32, useQ4),
+          quantizeTensor(`${L}.q`,    qRaw,    forceF32),
+          quantizeTensor(`${L}.k`,    kRaw,    forceF32),
+          quantizeTensor(`${L}.v`,    vRaw,    forceF32),
+          quantizeTensor(`${L}.o`,    cProjT,  forceF32),
+          quantizeTensor(`${L}.up`,   cFcT,    forceF32),
+          quantizeTensor(`${L}.down`, cMlpT,   forceF32),
         ]);
-        const toW = r => r.mode === 'int4' ? { mode:'int4', scales:r.scales, packed:r.packed, n_elements:r.n_elements }
-                       : r.mode === 'int8' ? { mode:'int8', scales:r.scales, quant:r.quant } : { mode:'f32', data:r.data };
+        const toW = r => r.mode === 'int8' ? { mode:'int8', scales:r.scales, quant:r.quant } : { mode:'f32', data:r.data };
         layer.q = toW(qRes); layer.k = toW(kRes); layer.v = toW(vRes);
         layer.o = toW(oRes); layer.up = toW(upRes); layer.down = toW(downRes);
 
@@ -2099,14 +2044,12 @@ self.onmessage = function ({ data }) {
         // Dispatch all to pool at once — pool fills all cores
         const results = await Promise.all(TENSOR_MAP.map(([key,], ti) => {
           const isNorm = NORM_KEYS.has(key) || quantType === QUANT.F32;
-          const useQ4  = !isNorm && layerIsQ4;
-          return quantizeTensor(TENSOR_MAP[ti][1], rawTensors[ti], isNorm, useQ4);
+          return quantizeTensor(TENSOR_MAP[ti][1], rawTensors[ti], isNorm);
         }));
         for (let ti = 0; ti < TENSOR_MAP.length; ti++) {
           const r = results[ti];
-          if (r.mode === 'int4')      layer[TENSOR_MAP[ti][0]] = { mode:'int4', scales:r.scales, packed:r.packed, n_elements:r.n_elements };
-          else if (r.mode === 'int8') layer[TENSOR_MAP[ti][0]] = { mode:'int8', scales:r.scales, quant:r.quant };
-          else                        layer[TENSOR_MAP[ti][0]] = { mode:'f32',  data:r.data };
+          if (r.mode === 'int8') layer[TENSOR_MAP[ti][0]] = { mode:'int8', scales:r.scales, quant:r.quant };
+          else                   layer[TENSOR_MAP[ti][0]] = { mode:'f32',  data:r.data };
         }
       }
 
@@ -2135,7 +2078,6 @@ self.onmessage = function ({ data }) {
     setProgress(97, 'Packing binary…');
     const { blob, manifest } = buildOutputBin({ config: state.config, tokBuf, embedData,
       posEmbedData, layers, finalNorm, finalNormBias, lmHead, quantType, groupSize,
-      nQ8Start: isMixedQuant ? nQ8Start : undefined, nQ8End: isMixedQuant ? nQ8End : undefined,
       tokenizer: state.tokenizer ?? null });
     const sizeMB  = (blob.size / 1024 / 1024).toFixed(2);
     const estimatedBytes = estimateSize({ config: state.config, tokBufSize: tokBuf.byteLength, quantType, groupSize });
@@ -2186,9 +2128,8 @@ function showDownload(blob, sizeMB, quantType, manifest) {
   state.outputBlobUrl = URL.createObjectURL(blob);
   const url = state.outputBlobUrl;
   $('dl-filename').textContent = 'model.bin';
-  const qLab = quantType === QUANT.INT4_MIXED ? 'INT4/8 mixed'
-    : quantType === QUANT.INT8 ? 'INT8' : 'FP32';
-  $('dl-meta').textContent = `${sizeMB} MB · ${qLab} · LLM1 v3`;
+  const qLab = quantType === QUANT.INT8 ? 'INT8' : 'FP32';
+  $('dl-meta').textContent = `${sizeMB} MB · ${qLab} · LLM1 v2`;
   $('dl-btn').disabled = false;
   $('dl-btn').onclick = () => {
     const a = document.createElement('a');

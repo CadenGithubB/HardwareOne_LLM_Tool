@@ -18,12 +18,13 @@ Verify GPU (optional):  python -c "import torch; print(torch.cuda.is_available()
 STEP 2 — Train the model
 --------------------------
 
-Use the narrow2 preset. It fits ~6.9 MB in PSRAM and gives the best Q→A accuracy.
+Use the narrow3 preset. It trades 2 layers of depth for a 20% wider FFN (768 vs 640),
+giving each layer more capacity to store distinct facts. Fits ~6.9 MB in PSRAM.
 
 Recommended command (Phase 1 + Phase 2 negatives in one run):
 
     python train_tiny_model.py \
-        --preset narrow2 \
+        --preset narrow3 \
         --text hardwareone_qa.txt hardwareone_qa_comprehensive.txt \
                hardwareone_qa_expanded.txt hardwareone_qa_troubleshooting.txt \
                hardwareone_qa_v2.txt hardwareone_qa_paraphrases.txt \
@@ -49,7 +50,7 @@ Answers will not bleed into unrelated questions.
 
 To check model size before training:
 
-    python train_tiny_model.py --preset narrow2 --estimate-only
+    python train_tiny_model.py --preset narrow3 --estimate-only
 
 
 STEP 3 — Convert to model.bin (browser tool)
@@ -91,7 +92,8 @@ PRESET REFERENCE
 
 Name      Vocab   Layers   dim   hidden   Est. INT8 PSRAM
 --------  ------  -------  ----  ------   -----------------
-narrow2   4K      20       128   640      ~6.9 MB  <- recommended
+narrow3   4K      18       128   768      ~6.9 MB  <- recommended (wider FFN)
+narrow2   4K      20       128   640      ~6.9 MB
 narrow    4K       8       256   512      ~7.3 MB
 stretch2  8K      20       128   640      ~8.1 MB  (tight, may OOM)
 stretch   8K      18       128   512      ~7.4 MB

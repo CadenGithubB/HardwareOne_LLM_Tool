@@ -72,6 +72,12 @@ PRESETS: dict[str, dict[str, int]] = {
     # PSRAM budget at ctx=64: ~4.7 MB weights + ~1.3 MB KV cache = ~6.9 MB total (~1 MB headroom).
     # Use this when narrow fails to associate answers with the right topic.
     "narrow2":  {"vocab_size": 4096,  "n_embd": 128, "n_layer": 20, "n_head": 4, "seq_len": 128, "n_inner": 640},
+    # "narrow3":  4K vocab / dim=128 / 18 layers / n_head=4 / n_inner=768 — wider FFN variant.
+    # Trades 2 layers of depth for 20% wider FFN (768 vs 640). Each layer stores more distinct
+    # facts in its feed-forward network, reducing answer bleed between similar topics.
+    # PSRAM budget at ctx=64: roughly same as narrow2 (~6.9 MB) — wider FFN offsets fewer layers.
+    # Recommended over narrow2 for domain Q&A where factual precision matters more than depth.
+    "narrow3":  {"vocab_size": 4096,  "n_embd": 128, "n_layer": 18, "n_head": 4, "seq_len": 128, "n_inner": 768},
 }
 
 # argparse dest → CLI flag (for “only override if user did not pass this flag”)
