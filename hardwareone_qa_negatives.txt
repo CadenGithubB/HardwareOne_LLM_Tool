@@ -1,110 +1,110 @@
 Q: Is ESP-NOW the same as WiFi?
-A: No. ESP-NOW is a peer-to-peer protocol that does not use WiFi infrastructure. WiFi connects to a router or access point. ESP-NOW sends packets directly between ESP32 devices without a router.
+A: ESP-NOW is a direct device-to-device radio link. It connects ESP32 units to each other without any router or access point.
 
 Q: Does ESP-NOW require a router?
-A: No. ESP-NOW communicates directly between ESP32 devices without any router or access point. WiFi requires a router; ESP-NOW does not.
+A: ESP-NOW communicates directly between ESP32 devices using peer-to-peer radio. It requires only that devices are within range of each other.
 
 Q: Is MQTT the same as WiFi?
-A: No. MQTT is a messaging protocol that runs over WiFi. WiFi is the network layer. MQTT is the application layer. You need WiFi active before MQTT can connect.
+A: MQTT is an application-layer messaging protocol that publishes and subscribes to topics through a broker. It rides on top of an active network connection.
 
 Q: Does MQTT work without WiFi?
-A: No. MQTT requires an active network connection such as WiFi to reach the broker. MQTT is a protocol, not a transport. Without WiFi, MQTT cannot connect to any broker.
+A: MQTT is a messaging protocol that requires an active network connection to reach its broker. The network must be established first before MQTT can connect.
 
 Q: Does Hardware One support 5GHz WiFi?
-A: No. The ESP32-S3 only supports 2.4GHz WiFi. 5GHz is not supported. Connect to a 2.4GHz network only.
+A: Hardware One uses the ESP32-S3, which operates on the 2.4GHz band only. Connect to a 2.4GHz network.
 
 Q: Is BLE the same as WiFi?
-A: No. BLE is Bluetooth Low Energy, a short-range wireless protocol for nearby devices. WiFi connects to the internet or local network. They are completely different radio technologies.
+A: BLE is Bluetooth Low Energy, a short-range radio for communicating with nearby phones and peripherals. It works independently and does not need a network.
 
 Q: Does BLE require a router?
-A: No. BLE communicates directly between nearby devices without any router. WiFi needs a router; BLE does not.
+A: BLE is Bluetooth Low Energy, a short-range radio that communicates directly with nearby devices. It operates independently with no infrastructure required.
 
 Q: Is the BME280 a motion sensor?
-A: No. The BME280 measures temperature, humidity, and barometric pressure. It does not detect motion. The ICM-42670-P is the motion sensor that measures acceleration and rotation.
+A: The BME280 measures temperature, humidity, and barometric pressure. It is an environmental sensor only.
 
 Q: Does the ICM sensor measure temperature?
-A: No. The ICM-42670-P is an IMU that measures acceleration and angular velocity. Temperature and humidity are measured by the BME280 sensor.
+A: The ICM-42670-P is an inertial measurement unit that tracks acceleration and angular velocity. It is a motion and orientation sensor only.
 
 Q: Is the VL53L1X a temperature sensor?
-A: No. The VL53L1X is a time-of-flight distance sensor that measures how far away an object is. Temperature is measured by the BME280.
+A: The VL53L1X is a time-of-flight distance sensor that measures how far away an object is using a laser pulse. It measures distance only.
 
 Q: Does the MLX90614 measure humidity?
-A: No. The MLX90614 is an infrared thermometer that measures surface temperature without contact. Humidity is measured by the BME280.
+A: The MLX90614 is an infrared thermometer that measures surface temperature without contact. It senses thermal radiation only.
 
 Q: Is the APDS9960 a GPS sensor?
-A: No. The APDS9960 detects color, ambient light, proximity, and gestures. GPS provides geographic location coordinates. They are completely different sensors.
+A: The APDS9960 detects color, ambient light, proximity, and gestures. It is an optical and gesture sensor for close-range interaction.
 
 Q: Does the GPS module measure altitude barometrically?
-A: No. The GPS module derives altitude from satellite signals, which is less accurate than barometric altitude. Barometric pressure altitude comes from the BME280 sensor.
+A: The GPS module derives altitude from satellite signals. Its altitude readings come from satellite triangulation, which is less precise than barometric methods.
 
 Q: Is OTA the same as the CLI?
-A: No. OTA stands for Over-The-Air firmware update, which replaces the running firmware wirelessly. The CLI is a command-line interface for interacting with the device in real time. They serve different purposes.
+A: OTA stands for Over-The-Air firmware update. It replaces the running firmware wirelessly through the web interface.
 
 Q: Does OTA use Bluetooth?
-A: No. OTA firmware updates on Hardware One are delivered over WiFi using the web interface or HTTP. Bluetooth is not used for OTA.
+A: OTA firmware updates on Hardware One are delivered over the web interface using an HTTP connection. The update file is uploaded through the browser.
 
 Q: Is LittleFS the same as the SD card?
-A: No. LittleFS is the internal flash filesystem built into the ESP32-S3. The SD card is external removable storage. LittleFS is always present; the SD card is optional.
+A: LittleFS is the internal flash filesystem built into the ESP32-S3. It stores core firmware data, web assets, and settings and is always present on the device.
 
 Q: Can the SD card replace LittleFS?
-A: No. LittleFS stores the core firmware data, web assets, and settings in internal flash. The SD card provides extra storage for maps, logs, and large files. They are separate filesystems with different roles.
+A: LittleFS is the internal flash filesystem that stores core firmware data, web assets, and device settings. It is integral to the device and always present.
 
 Q: Is PSRAM the same as flash storage?
-A: No. PSRAM is high-speed RAM used for runtime data, the KV cache, and model weights during inference. Flash storage holds the firmware and LittleFS files persistently. PSRAM is volatile; flash is not.
+A: PSRAM is high-speed volatile RAM used for runtime data, the KV cache, and model weights during inference. It is cleared when the device powers off.
 
 Q: Does the LLM run on WiFi?
-A: No. The on-device LLM runs entirely on the ESP32-S3 processor using PSRAM for model weights. WiFi is used to serve the web interface, not to run inference.
+A: The on-device LLM runs entirely on the ESP32-S3 processor using PSRAM for model weights. All inference happens locally on the chip.
 
 Q: Does Hardware One send data to the cloud for LLM inference?
-A: No. All LLM inference is done locally on the device using the on-device model loaded into PSRAM. No data is sent to any external server.
+A: All LLM inference is done locally on the ESP32-S3 using the on-device model loaded into PSRAM. Everything runs on the device itself.
 
 Q: Is ESP-NOW used for internet connectivity?
-A: No. ESP-NOW provides direct peer-to-peer communication between nearby ESP32 devices only. Internet access requires WiFi connected to a router.
+A: ESP-NOW is a direct peer-to-peer radio link between nearby ESP32 devices. It is designed for local device-to-device communication only.
 
 Q: Does bonded mode disable WiFi?
-A: No. Bonded mode disables the WiFi access point so the device only connects to a known network as a station. WiFi itself remains active; only the AP is turned off.
+A: Bonded mode configures the device to connect only as a station to a trusted network. The access point broadcast is turned off, but station connectivity remains active.
 
 Q: Is MQTT a hardware sensor?
-A: No. MQTT is a lightweight publish-subscribe messaging protocol used to send sensor data to a broker. The sensors are the BME280, ICM, VL53L1X, and others. MQTT is software, not hardware.
+A: MQTT is a lightweight publish-subscribe messaging protocol used to send and receive data through a broker. It is a software protocol, running at the application layer.
 
 Q: Does the PCA9685 measure anything?
-A: No. The PCA9685 is a PWM driver that controls servo motors and other PWM devices. It outputs signals; it does not sense or measure anything.
+A: The PCA9685 is a 16-channel PWM driver that controls servo motors and other PWM devices. It is an output controller that generates signals.
 
 Q: Is NeoPixel a sensor?
-A: No. NeoPixel refers to addressable RGB LEDs that produce light. Sensors measure the environment. NeoPixels are output devices, not input devices.
+A: NeoPixel refers to addressable RGB LEDs that produce colored light. They are output display devices controlled by digital signals.
 
 Q: Can Hardware One run without PSRAM?
-A: No. The on-device LLM requires PSRAM to store model weights and the KV cache. Without PSRAM the LLM cannot be loaded. Other features like WiFi and sensors work without PSRAM, but the LLM will not.
+A: PSRAM is required to store the LLM model weights and KV cache for on-device inference. The LLM feature depends on PSRAM being available.
 
 Q: Is the CLI the same as the web interface?
-A: No. The CLI is a serial command-line interface accessed over USB. The web interface is served over WiFi in a browser. Both can configure the device but through different channels.
+A: The CLI is a serial command-line interface accessed over USB. It provides direct text-based interaction with the device for configuration and diagnostics.
 
 Q: Does ESP-NOW use TCP/IP?
-A: No. ESP-NOW uses its own lightweight frame protocol directly over the 802.11 radio without TCP/IP. WiFi uses TCP/IP. ESP-NOW is lower level and lower latency than WiFi networking.
+A: ESP-NOW uses its own lightweight frame protocol directly over the 802.11 radio. It is a low-level, low-latency link layer protocol.
 
 Q: Is automation the same as the LLM?
-A: No. The automation system runs user-defined rules and triggers for sensors and outputs. The LLM is a language model for text generation and Q&A. They are independent subsystems.
+A: The automation system runs user-defined rules and triggers for sensors and outputs. It executes conditional logic based on sensor readings and schedules.
 
 Q: Does the LLM require an SD card?
-A: No. The LLM model file can be stored on either the internal LittleFS filesystem or the SD card. An SD card is convenient for larger models but is not required if the model fits in internal flash.
+A: The LLM model file can be stored on the internal LittleFS filesystem. An SD card provides additional storage space but is optional if the model fits in internal flash.
 
 Q: Is Hardware One a cloud device?
-A: No. Hardware One is a self-contained embedded device. All processing, inference, and storage happen locally on the ESP32-S3. It can connect to WiFi and MQTT brokers but does not require any cloud service to operate.
+A: Hardware One is a self-contained embedded device. All processing, inference, and storage happen locally on the ESP32-S3.
 
 Q: Does BME280 detect motion?
-A: No. The BME280 is an environmental sensor for temperature, humidity, and pressure. Motion detection uses the ICM-42670-P accelerometer and gyroscope.
+A: The BME280 is an environmental sensor that measures temperature, humidity, and barometric pressure. It senses atmospheric conditions only.
 
 Q: Is the VL53L1X affected by ambient light?
-A: The VL53L1X is a time-of-flight sensor and is relatively immune to ambient light compared to IR proximity sensors. It uses a narrow 940nm laser pulse and measures return time, not reflected intensity.
+A: The VL53L1X is a time-of-flight sensor that uses a narrow 940nm laser pulse and measures return time. It is relatively immune to ambient light because it measures timing rather than reflected intensity.
 
 Q: Does WiFi work in bonded mode?
-A: Yes, WiFi works in bonded mode. In bonded mode the access point is disabled and the device connects only as a station to a trusted network. WiFi connectivity is maintained; only the AP broadcast is turned off.
+A: In bonded mode the device connects as a station to a trusted network. Station-mode connectivity remains fully active with the access point broadcast turned off.
 
 Q: Is ESP-NOW range the same as WiFi range?
-A: No. ESP-NOW typically has a shorter effective range than WiFi in infrastructure mode because there is no access point amplification. Expect roughly 10-30 meters indoors for reliable ESP-NOW links.
+A: ESP-NOW typically achieves roughly 10-30 meters indoors for reliable links. Range depends on environment and antenna orientation between the paired devices.
 
 Q: Does the on-device LLM understand all languages?
-A: No. The on-device model is trained specifically on Hardware One Q&A data in English. It is a tiny domain-specific model, not a general-purpose multilingual model.
+A: The on-device LLM is a tiny domain-specific model trained on Hardware One Q&A data in English. It answers questions about this device in English only.
 
 Q: Is the LLM on Hardware One the same as ChatGPT?
-A: No. The Hardware One LLM is a tiny custom model with around 5 million parameters trained specifically on Hardware One documentation. ChatGPT is a massive general-purpose model. The Hardware One model only answers questions about this device.
+A: The Hardware One LLM is a tiny custom model with around 5 million parameters trained specifically on Hardware One documentation. It answers questions about this device only.

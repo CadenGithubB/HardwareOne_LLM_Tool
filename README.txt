@@ -20,29 +20,29 @@ STEP 2 — Train the model
 
 Use the narrow2 preset. It fits ~6.9 MB in PSRAM and gives the best Q→A accuracy.
 
-    python train_tiny_model.py \
-        --preset narrow2 \
-        --text hardwareone_qa.txt hardwareone_qa_comprehensive.txt \
-               hardwareone_qa_expanded.txt hardwareone_qa_troubleshooting.txt \
-               hardwareone_qa_v2.txt \
-        --epochs 30 \
-        --batch-size 4 \
-        --out ./out_model
-
-The script prints Q&A test output after training. Check that answers match
-questions. If they don't, run more epochs or add more training data.
-
-Optional — add negatives to suppress hallucinations (Phase 2 training):
+Recommended command (Phase 1 + Phase 2 negatives in one run):
 
     python train_tiny_model.py \
         --preset narrow2 \
         --text hardwareone_qa.txt hardwareone_qa_comprehensive.txt \
                hardwareone_qa_expanded.txt hardwareone_qa_troubleshooting.txt \
-               hardwareone_qa_v2.txt \
+               hardwareone_qa_v2.txt hardwareone_qa_paraphrases.txt \
         --negatives hardwareone_qa_negatives.txt \
-        --epochs 30 \
-        --batch-size 4 \
+        --epochs 300 --batch-size 8 --lr 3e-4 \
+        --neg-epochs 30 \
         --out ./out_model
+
+Phase 1 (--epochs 300): trains on positive Q&A data. Loss should fall from ~7
+down to ~0.1-0.3. The script runs a Q&A test after Phase 1 completes.
+
+Phase 2 (--neg-epochs 30): continues from Phase 1 weights on combined
+positive + negative data. Teaches the model to distinguish similar-sounding
+topics (e.g. ESP-NOW vs WiFi, BLE vs WiFi). 30 epochs is enough — the
+negatives file is small and the corrections settle in quickly. Running
+significantly more epochs risks eroding Phase 1 quality.
+
+The --neg-lr defaults to half of --lr (1.5e-4), which is intentionally
+conservative to avoid overwriting Phase 1 associations.
 
 Note: Training is Q&A boundary-aware. Each Q/A pair is its own training block.
 Answers will not bleed into unrelated questions.
