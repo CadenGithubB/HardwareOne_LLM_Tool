@@ -883,7 +883,7 @@ function buildFirmwareManifest(meta) {
 
   const sequence = [];
   function record(path, w, extra) {
-    const n = w.mode === 'int8' ? w.quant.length : w.data.length;
+    const n = tensorElements(w);
     const file_bytes = 4 + tensorBlockPayloadBytes(w);
     const row = Object.assign({
       path, n_elements: n, mode: w.mode, file_bytes,
@@ -1693,7 +1693,8 @@ function splitGPT2QKV(cAttn, dim) {
 // ── Verbose console diagnostics (copy entire "[convert] ═══" group for AI / firmware cross-check) ──
 function summarizeWeight(name, w, maxStride) {
   if (!w) return { name, missing: true };
-  const n = w.mode === 'int8' ? w.quant.length : w.data.length;
+  if (w.mode === 'int4') return { name, mode: 'int4', n_elements: w.n_elements, scales: w.scales.length };
+  const n = tensorElements(w);
   const stride = maxStride || Math.max(1, Math.floor(n / 4096));
   if (w.mode === 'f32') {
     const d = w.data;

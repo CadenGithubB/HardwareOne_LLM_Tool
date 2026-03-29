@@ -103,6 +103,6 @@ export function tokenizerStats(tokenizer) {
   return {
     vocabSize: tokenizer.vocabSize,
     mergeCount: tokenizer.merges.length,
-    sampleTokens: tokenizer.vocab.slice(0, 8).map((s, i) => `[${i}]="${s}"`).join(', ')
+    sampleTokens: tokenizer.vocab.slice(0, 10).map((s, i) => `[${i}]="${s}"`).join(', ')
   };
 }

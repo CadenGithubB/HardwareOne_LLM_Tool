@@ -1,0 +1,830 @@
+Q: How do automations work
+A: Automations are scheduled or conditional command sequences that run locally on the device. They require no internet connection and can trigger at specific times, intervals, or on boot.
+
+Q: Explain automations
+A: Automations are scheduled or conditional command sequences that run locally on the device. They require no internet connection and can trigger at specific times, intervals, or on boot.
+
+Q: automate something
+A: Automations are scheduled or conditional command sequences that run locally on the device. They require no internet connection and can trigger at specific times, intervals, or on boot.
+
+Q: List automations
+A: Automations can be listed with automation list to see all configured automations and their current status.
+
+Q: Show my automations
+A: Automations can be listed with automation list to see all configured automations and their current status.
+
+Q: automations
+A: Automations can be listed with automation list to see all configured automations and their current status.
+
+Q: Create an automation
+A: Automations support conditions with IF and THEN. For example, IF TEMP>75 THEN ledcolor red will turn the LED red when temperature exceeds 75.
+
+Q: Set up an automation rule
+A: Automations support conditions with IF and THEN. For example, IF TEMP>75 THEN ledcolor red will turn the LED red when temperature exceeds 75.
+
+Q: make it do something when temp is high
+A: Automations support conditions with IF and THEN. For example, IF TEMP>75 THEN ledcolor red will turn the LED red when temperature exceeds 75.
+
+Q: Connect to a bluetooth device
+A: BLE connections are made by first running bluetooth scan to find nearby devices, then bluetooth connect followed by the device address to connect.
+
+Q: Pair with a bluetooth device
+A: BLE connections are made by first running bluetooth scan to find nearby devices, then bluetooth connect followed by the device address to connect.
+
+Q: Disable bluetooth
+A: Bluetooth can be disabled with bluetooth off.
+
+Q: Stop BLE
+A: Bluetooth can be disabled with bluetooth off.
+
+Q: Switch off bluetooth
+A: Bluetooth can be disabled with bluetooth off.
+
+Q: ble off
+A: Bluetooth can be disabled with bluetooth off.
+
+Q: Enable BLE
+A: Bluetooth can be enabled with bluetooth on. Note that Bluetooth must be enabled in the build configuration with ENABLE_BLUETOOTH=1.
+
+Q: Start bluetooth
+A: Bluetooth can be enabled with bluetooth on. Note that Bluetooth must be enabled in the build configuration with ENABLE_BLUETOOTH=1.
+
+Q: I want to use bluetooth
+A: Bluetooth can be enabled with bluetooth on. Note that Bluetooth must be enabled in the build configuration with ENABLE_BLUETOOTH=1.
+
+Q: ble on
+A: Bluetooth can be enabled with bluetooth on. Note that Bluetooth must be enabled in the build configuration with ENABLE_BLUETOOTH=1.
+
+Q: Scan for bluetooth devices
+A: Bluetooth scanning is done with bluetooth scan to find nearby BLE devices.
+
+Q: Find BLE devices nearby
+A: Bluetooth scanning is done with bluetooth scan to find nearby BLE devices.
+
+Q: any devices nearby
+A: Bluetooth scanning is done with bluetooth scan to find nearby BLE devices.
+
+Q: Bluetooth status
+A: Bluetooth status can be checked with bluetooth status to see whether BLE is enabled and any current connection status.
+
+Q: bluetooth
+A: Bluetooth status can be checked with bluetooth status to see whether BLE is enabled and any current connection status.
+
+Q: bluetooth?
+A: Bluetooth status can be checked with bluetooth status to see whether BLE is enabled and any current connection status.
+
+Q: ble
+A: Bluetooth status can be checked with bluetooth status to see whether BLE is enabled and any current connection status.
+
+Q: build
+A: Building requires ESP-IDF. Run idf.py build to compile, then idf.py -p PORT flash to flash.
+
+Q: How do I build the firmware
+A: Building requires ESP-IDF. Run idf.py build to compile, then idf.py -p PORT flash to flash. You can combine them with idf.py -p PORT flash monitor to also open the serial monitor.
+
+Q: Compile and flash
+A: Building requires ESP-IDF. Run idf.py build to compile, then idf.py -p PORT flash to flash. You can combine them with idf.py -p PORT flash monitor to also open the serial monitor.
+
+Q: Flash the firmware
+A: Building requires ESP-IDF. Run idf.py build to compile, then idf.py -p PORT flash to flash. You can combine them with idf.py -p PORT flash monitor to also open the serial monitor.
+
+Q: flash
+A: Building requires ESP-IDF. Run idf.py build to compile, then idf.py -p PORT flash to flash. You can combine them with idf.py -p PORT flash monitor to also open the serial monitor.
+
+Q: Disable debug logging
+A: Debug logging can be disabled per module. Use debug followed by the module name and 0 to disable it, for example debugwifi 0.
+
+Q: Turn off debugging
+A: Debug logging can be disabled per module. Use debug followed by the module name and 0 to disable it, for example debugwifi 0.
+
+Q: Enable debug logging
+A: Debug logging can be enabled per module. Use debug followed by the module name and 1 to enable it, for example debugwifi 1. Add temp at the end to enable it only until the next reboot.
+
+Q: Turn on debugging
+A: Debug logging can be enabled per module. Use debug followed by the module name and 1 to enable it, for example debugwifi 1. Add temp at the end to enable it only until the next reboot.
+
+Q: Start debug mode
+A: Debug logging can be enabled per module. Use debug followed by the module name and 1 to enable it, for example debugwifi 1. Add temp at the end to enable it only until the next reboot.
+
+Q: debug
+A: Debug logging can be enabled per module. Use debug followed by the module name and 1 to enable it. Use debug list to see all available flags.
+
+Q: logs
+A: Debug logging can be enabled per module. Use debug followed by the module name and 1 to enable it. Use debug list to see all available flags.
+
+Q: verbose
+A: Debug logging can be enabled per module. Use debug followed by the module name and 1 to enable it. Use debug list to see all available flags.
+
+Q: What debug options are there
+A: Debug modules are available for each subsystem. Use debug list to see all available flags.
+
+Q: What is bonded mode
+A: ESP-NOW bonded mode lets two devices share their command registries. The controller device gains a Remote tab in its web UI showing the paired device's features, and commands are routed automatically.
+
+Q: How does bonding work
+A: ESP-NOW bonded mode lets two devices share their command registries. The controller device gains a Remote tab in its web UI showing the paired device's features, and commands are routed automatically.
+
+Q: Explain device bonding
+A: ESP-NOW bonded mode lets two devices share their command registries. The controller device gains a Remote tab in its web UI showing the paired device's features, and commands are routed automatically.
+
+Q: Turn off espnow
+A: ESP-NOW can be disabled with espnow off.
+
+Q: Disable esp-now
+A: ESP-NOW can be disabled with espnow off.
+
+Q: Stop espnow
+A: ESP-NOW can be disabled with espnow off.
+
+Q: Turn on espnow
+A: ESP-NOW can be enabled with espnow on.
+
+Q: Enable esp-now
+A: ESP-NOW can be enabled with espnow on.
+
+Q: Start espnow
+A: ESP-NOW can be enabled with espnow on.
+
+Q: What is espnow
+A: ESP-NOW is Hardware One's wireless peer-to-peer protocol. Devices pair with a shared passphrase and form an encrypted mesh network for messages, file transfer, and metadata sharing.
+
+Q: Tell me about esp-now
+A: ESP-NOW is Hardware One's wireless peer-to-peer protocol. Devices pair with a shared passphrase and form an encrypted mesh network for messages, file transfer, and metadata sharing.
+
+Q: Explain espnow
+A: ESP-NOW is Hardware One's wireless peer-to-peer protocol. Devices pair with a shared passphrase and form an encrypted mesh network for messages, file transfer, and metadata sharing.
+
+Q: Send a message to another device
+A: ESP-NOW messaging is done with espnow send followed by the peer's MAC address and your message. Use espnow peers to find peer MAC addresses.
+
+Q: Message a peer
+A: ESP-NOW messaging is done with espnow send followed by the peer's MAC address and your message. Use espnow peers to find peer MAC addresses.
+
+Q: talk to other device
+A: ESP-NOW messaging is done with espnow send followed by the peer's MAC address and your message. Use espnow peers to find peer MAC addresses.
+
+Q: msg a peer
+A: ESP-NOW messaging is done with espnow send followed by the peer's MAC address and your message. Use espnow peers to find peer MAC addresses.
+
+Q: How do I pair two devices
+A: ESP-NOW pairing is done through the Pair tab in the web UI on both devices. Set the same passphrase on both, then have one device initiate pairing while the other accepts.
+
+Q: Pair devices together
+A: ESP-NOW pairing is done through the Pair tab in the web UI on both devices. Set the same passphrase on both, then have one device initiate pairing while the other accepts.
+
+Q: Connect two hardware one devices
+A: ESP-NOW pairing is done through the Pair tab in the web UI on both devices. Set the same passphrase on both, then have one device initiate pairing while the other accepts.
+
+Q: How do I link devices
+A: ESP-NOW pairing is done through the Pair tab in the web UI on both devices. Set the same passphrase on both, then have one device initiate pairing while the other accepts.
+
+Q: pair
+A: ESP-NOW pairing is done through the Pair tab in the web UI on both devices. Set the same passphrase on both, then have one device initiate pairing.
+
+Q: connect devices
+A: ESP-NOW pairing is done through the Pair tab in the web UI on both devices. Set the same passphrase on both, then have one device initiate pairing.
+
+Q: Who am I paired with
+A: ESP-NOW peers can be listed with espnow peers to see all known paired devices with their MAC addresses and names.
+
+Q: List my peers
+A: ESP-NOW peers can be listed with espnow peers to see all known paired devices with their MAC addresses and names.
+
+Q: peers
+A: ESP-NOW peers can be listed with espnow peers to see all known paired devices with their MAC addresses and names.
+
+Q: whos connected
+A: ESP-NOW peers can be listed with espnow peers to see all known paired devices with their MAC addresses and names.
+
+Q: Check espnow status
+A: ESP-NOW status can be checked with espnow status to see the connection status and the list of paired peers.
+
+Q: Is espnow working
+A: ESP-NOW status can be checked with espnow status to see the connection status and the list of paired peers.
+
+Q: espnow
+A: ESP-NOW status can be checked with espnow status to see the connection status and the list of paired peers.
+
+Q: espnow?
+A: ESP-NOW status can be checked with espnow status to see the connection status and the list of paired peers.
+
+Q: Delete a file
+A: Files can be deleted with filedelete followed by the file path.
+
+Q: Remove a file
+A: Files can be deleted with filedelete followed by the file path.
+
+Q: What files are on the device
+A: Files on the device can be listed with the files command for the root directory, or files followed by a path for a specific folder.
+
+Q: List files
+A: Files on the device can be listed with the files command for the root directory, or files followed by a path for a specific folder.
+
+Q: Browse files
+A: Files on the device can be listed with the files command for the root directory, or files followed by a path for a specific folder.
+
+Q: files
+A: Files on the device can be listed with the files command for the root directory, or files followed by a path for a specific folder.
+
+Q: Read a file
+A: Files on the device can be viewed with fileview followed by the file path to display its contents.
+
+Q: View file contents
+A: Files on the device can be viewed with fileview followed by the file path to display its contents.
+
+Q: How do I restart the device
+A: Hardware One can be restarted with the reboot command.
+
+Q: Reboot
+A: Hardware One can be restarted with the reboot command.
+
+Q: reboot
+A: Hardware One can be restarted with the reboot command.
+
+Q: restart
+A: Hardware One can be restarted with the reboot command.
+
+Q: battery
+A: Hardware One can report battery status. Use battery status to see the current voltage, charge level, and charging status.
+
+Q: battery?
+A: Hardware One can report battery status. Use battery status to see the current voltage, charge level, and charging status.
+
+Q: hows the battery
+A: Hardware One can report battery status. Use battery status to see the current voltage, charge level, and charging status.
+
+Q: how much juice left
+A: Hardware One can report battery status. Use battery status to see the current voltage, charge level, and charging status.
+
+Q: Battery level
+A: Hardware One can report battery status. Use battery status to see the current voltage, charge level, and charging status. Battery monitoring must be enabled in the build configuration.
+
+Q: How much battery is left
+A: Hardware One can report battery status. Use battery status to see the current voltage, charge level, and charging status. Battery monitoring must be enabled in the build configuration.
+
+Q: Check the battery
+A: Hardware One can report battery status. Use battery status to see the current voltage, charge level, and charging status. Battery monitoring must be enabled in the build configuration.
+
+Q: How much memory is free
+A: Hardware One can report memory usage. Use memory to see heap and PSRAM usage, memsum for a one-line summary, or memreport for a full breakdown.
+
+Q: Check RAM
+A: Hardware One can report memory usage. Use memory to see heap and PSRAM usage, memsum for a one-line summary, or memreport for a full breakdown.
+
+Q: memory
+A: Hardware One can report memory usage. Use memory to see heap and PSRAM usage, memsum for a one-line summary, or memreport for a full breakdown.
+
+Q: ram
+A: Hardware One can report memory usage. Use memory to see heap and PSRAM usage, memsum for a one-line summary, or memreport for a full breakdown.
+
+Q: status
+A: Hardware One can show device status. Use uptime for time since reboot, memory for RAM usage, wifi for network status, and battery status for power.
+
+Q: how are you
+A: Hardware One can show device status. Use uptime for time since reboot, memory for RAM usage, wifi for network status, and battery status for power.
+
+Q: sup
+A: Hardware One can show device status. Use uptime for time since reboot, memory for RAM usage, wifi for network status, and battery status for power.
+
+Q: What time is it
+A: Hardware One can show the current time with the time command. Use synctime to synchronize from an NTP server.
+
+Q: Show the time
+A: Hardware One can show the current time with the time command. Use synctime to synchronize from an NTP server.
+
+Q: time
+A: Hardware One can show the current time with the time command. Use synctime to synchronize from an NTP server.
+
+Q: clock
+A: Hardware One can show the current time with the time command. Use synctime to synchronize from an NTP server.
+
+Q: Sync the clock
+A: Hardware One can sync its clock from an NTP server with the synctime command.
+
+Q: Update the time
+A: Hardware One can sync its clock from an NTP server with the synctime command.
+
+Q: Help
+A: Hardware One has a built-in help system. Use help to enter it, type a module name to see its commands, or help all to list everything.
+
+Q: What commands can I use
+A: Hardware One has a built-in help system. Use help to enter it, type a module name to see its commands, or help all to list everything.
+
+Q: help
+A: Hardware One has a built-in help system. Use help to enter it, type a module name to see its commands, or help all to list everything.
+
+Q: help?
+A: Hardware One has a built-in help system. Use help to enter it, type a module name to see its commands, or help all to list everything.
+
+Q: whats going on
+A: Hardware One has a built-in help system. Use help to enter it, type a module name to see its commands, or help all to list everything. Use uptime and memory for device status.
+
+Q: What do you do
+A: Hardware One is a versatile ESP32-based platform with sensors, wireless connectivity, an OLED display, and a command-line interface. Use help to see all available commands.
+
+Q: What are your features
+A: Hardware One is a versatile ESP32-based platform with sensors, wireless connectivity, an OLED display, and a command-line interface. Use help to see all available commands.
+
+Q: What can this device do
+A: Hardware One is a versatile ESP32-based platform with sensors, wireless connectivity, an OLED display, and a command-line interface. Use help to see all available commands.
+
+Q: List your capabilities
+A: Hardware One is a versatile ESP32-based platform with sensors, wireless connectivity, an OLED display, and a command-line interface. Use help to see all available commands.
+
+Q: Who are you
+A: Hardware One is an ESP32-based handheld device with sensors, an OLED display, and a command-line interface. It can be controlled from a web browser or the serial terminal.
+
+Q: What is this device
+A: Hardware One is an ESP32-based handheld device with sensors, an OLED display, and a command-line interface. It can be controlled from a web browser or the serial terminal.
+
+Q: whats this
+A: Hardware One is an ESP32-based handheld device with sensors, an OLED display, and a command-line interface. It can be controlled from a web browser or the serial terminal.
+
+Q: what r u
+A: Hardware One is an ESP32-based handheld device with sensors, an OLED display, and a command-line interface. It can be controlled from a web browser or the serial terminal.
+
+Q: How to set up first time
+A: Hardware One launches a setup wizard automatically on first boot via serial and OLED. Open serial monitor at 115200 baud, choose Basic or Advanced setup, and create an admin account.
+
+Q: First time setup
+A: Hardware One launches a setup wizard automatically on first boot via serial and OLED. Open serial monitor at 115200 baud, choose Basic or Advanced setup, and create an admin account.
+
+Q: Initial configuration
+A: Hardware One launches a setup wizard automatically on first boot via serial and OLED. Open serial monitor at 115200 baud, choose Basic or Advanced setup, and create an admin account.
+
+Q: What is my IP address
+A: Hardware One prints its IP address in the serial monitor after connecting to WiFi. You can also use the webstatus command at any time to see the IP address and web server status.
+
+Q: Find the IP
+A: Hardware One prints its IP address in the serial monitor after connecting to WiFi. You can also use the webstatus command at any time to see the IP address and web server status.
+
+Q: Show IP address
+A: Hardware One prints its IP address in the serial monitor after connecting to WiFi. You can also use the webstatus command at any time to see the IP address and web server status.
+
+Q: ip
+A: Hardware One prints its IP address in the serial monitor after connecting to WiFi. You can also use the webstatus command at any time to see the IP address.
+
+Q: whats my ip
+A: Hardware One prints its IP address in the serial monitor after connecting to WiFi. You can also use the webstatus command at any time to see the IP address.
+
+Q: What boards are supported
+A: Hardware One runs on the Seeed XIAO ESP32-S3, Adafruit QT PY ESP32-S3, Adafruit QT PY ESP32, and Adafruit Feather ESP32.
+
+Q: Which ESP32 does this run on
+A: Hardware One runs on the Seeed XIAO ESP32-S3, Adafruit QT PY ESP32-S3, Adafruit QT PY ESP32, and Adafruit Feather ESP32.
+
+Q: Open the web interface
+A: Hardware One serves a web UI at its IP address. Connect the device to WiFi, then navigate to the IP in a browser and log in with your admin credentials. Use webstatus to see the IP.
+
+Q: Access the dashboard
+A: Hardware One serves a web UI at its IP address. Connect the device to WiFi, then navigate to the IP in a browser and log in with your admin credentials. Use webstatus to see the IP.
+
+Q: Open the web page
+A: Hardware One serves a web UI at its IP address. Connect the device to WiFi, then navigate to the IP in a browser and log in with your admin credentials. Use webstatus to see the IP.
+
+Q: web
+A: Hardware One serves a web UI at its IP address. Connect the device to WiFi, then navigate to the IP in a browser. Use webstatus to see the IP.
+
+Q: Change a setting
+A: Hardware One settings can be changed with settings set followed by the key and value. For example, settings set deviceName MyDevice.
+
+Q: Update settings
+A: Hardware One settings can be changed with settings set followed by the key and value. For example, settings set deviceName MyDevice.
+
+Q: Export settings
+A: Hardware One settings can be exported with settings export, which outputs all current settings as JSON. Save this output to restore settings later.
+
+Q: Back up my configuration
+A: Hardware One settings can be exported with settings export, which outputs all current settings as JSON. Save this output to restore settings later.
+
+Q: Save my settings
+A: Hardware One settings can be exported with settings export, which outputs all current settings as JSON. Save this output to restore settings later.
+
+Q: Reset to factory defaults
+A: Hardware One settings can be reset to defaults with settings reset.
+
+Q: Factory reset
+A: Hardware One settings can be reset to defaults with settings reset.
+
+Q: Wipe all settings
+A: Hardware One settings can be reset to defaults with settings reset.
+
+Q: reset
+A: Hardware One settings can be reset to defaults with settings reset. For a full factory reset, use the factoryreset command.
+
+Q: nuke settings
+A: Hardware One settings can be reset to defaults with settings reset. For a full factory reset, use the factoryreset command.
+
+Q: wipe it
+A: Hardware One settings can be reset to defaults with settings reset. For a full factory reset, use the factoryreset command.
+
+Q: start over
+A: Hardware One settings can be reset to defaults with settings reset. For a full factory reset, use the factoryreset command.
+
+Q: Show settings
+A: Hardware One settings can be viewed with settings list to see all current settings and their values.
+
+Q: View current settings
+A: Hardware One settings can be viewed with settings list to see all current settings and their values.
+
+Q: settings
+A: Hardware One settings can be viewed with settings list to see all current settings and their values.
+
+Q: How long has it been running
+A: Hardware One tracks uptime. Use the uptime command to see how long the device has been running since the last reboot.
+
+Q: Check uptime
+A: Hardware One tracks uptime. Use the uptime command to see how long the device has been running since the last reboot.
+
+Q: uptime
+A: Hardware One tracks uptime. Use the uptime command to see how long the device has been running since the last reboot.
+
+Q: Start the web server
+A: Hardware One web server can be started with webstart. Use webauto on to make it start automatically on every boot.
+
+Q: Turn on web server
+A: Hardware One web server can be started with webstart. Use webauto on to make it start automatically on every boot.
+
+Q: Stop the web server
+A: Hardware One web server can be stopped with webstop.
+
+Q: Turn off web server
+A: Hardware One web server can be stopped with webstop.
+
+Q: How do I set up MQTT
+A: MQTT broker connection requires setting the broker with mqtt broker followed by the host address, then mqtt connect to connect. Use mqtt user and mqtt pass if authentication is required.
+
+Q: Connect to MQTT broker
+A: MQTT broker connection requires setting the broker with mqtt broker followed by the host address, then mqtt connect to connect. Use mqtt user and mqtt pass if authentication is required.
+
+Q: Configure MQTT
+A: MQTT broker connection requires setting the broker with mqtt broker followed by the host address, then mqtt connect to connect. Use mqtt user and mqtt pass if authentication is required.
+
+Q: Turn off MQTT
+A: MQTT can be disconnected with mqtt disconnect to disconnect from the current broker.
+
+Q: Disable MQTT
+A: MQTT can be disconnected with mqtt disconnect to disconnect from the current broker.
+
+Q: Stop MQTT
+A: MQTT can be disconnected with mqtt disconnect to disconnect from the current broker.
+
+Q: Is MQTT connected
+A: MQTT connection status can be checked with mqtt status to see whether the device is connected to the broker and what topic prefix is being used.
+
+Q: MQTT status
+A: MQTT connection status can be checked with mqtt status to see whether the device is connected to the broker and what topic prefix is being used.
+
+Q: mqtt
+A: MQTT connection status can be checked with mqtt status to see whether the device is connected to the broker and what topic prefix is being used.
+
+Q: mqtt?
+A: MQTT connection status can be checked with mqtt status to see whether the device is connected to the broker and what topic prefix is being used.
+
+Q: What is MQTT used for
+A: MQTT lets the device publish sensor data and receive commands via a message broker like Home Assistant Mosquitto. Configure the broker address with the mqtt commands.
+
+Q: Tell me about MQTT
+A: MQTT lets the device publish sensor data and receive commands via a message broker like Home Assistant Mosquitto. Configure the broker address with the mqtt commands.
+
+Q: Set screen brightness
+A: OLED brightness can be adjusted with oled brightness followed by a value from 0 to 255.
+
+Q: Make the screen brighter
+A: OLED brightness can be adjusted with oled brightness followed by a value from 0 to 255.
+
+Q: Dim the display
+A: OLED brightness can be adjusted with oled brightness followed by a value from 0 to 255.
+
+Q: update firmware
+A: OTA firmware updates are done by uploading the binary through the web interface OTA page, or using the otaupdate CLI command.
+
+Q: ota
+A: OTA firmware updates are done by uploading the binary through the web interface OTA page, or using the otaupdate CLI command.
+
+Q: Log sensor data
+A: Sensor data can be logged to a file with sensorlog start followed by the sensor name. Use sensorlog stop to stop, sensorlog view to see recent entries, and sensorlog list to see active logs.
+
+Q: Record sensor readings
+A: Sensor data can be logged to a file with sensorlog start followed by the sensor name. Use sensorlog stop to stop, sensorlog view to see recent entries, and sensorlog list to see active logs.
+
+Q: Start logging sensor data
+A: Sensor data can be logged to a file with sensorlog start followed by the sensor name. Use sensorlog stop to stop, sensorlog view to see recent entries, and sensorlog list to see active logs.
+
+Q: List the sensors
+A: Sensors all follow the same pattern: openSENSOR to start, closeSENSOR to stop, and SENSORread to take a reading. For example, opentof, closetof, and tofread for the time-of-flight sensor.
+
+Q: What sensors does this have
+A: Sensors all follow the same pattern: openSENSOR to start, closeSENSOR to stop, and SENSORread to take a reading. For example, opentof, closetof, and tofread for the time-of-flight sensor.
+
+Q: sensors
+A: Sensors all follow the same pattern: openSENSOR to start, closeSENSOR to stop, and SENSORread to take a reading. For example, opentof, closetof, and tofread for the time-of-flight sensor.
+
+Q: sensors?
+A: Sensors all follow the same pattern: openSENSOR to start, closeSENSOR to stop, and SENSORread to take a reading. For example, opentof, closetof, and tofread for the time-of-flight sensor.
+
+Q: Control a servo
+A: Servo control uses the servo command followed by the channel number and angle. The PCA9685 controller supports up to 16 servo channels.
+
+Q: Move a servo
+A: Servo control uses the servo command followed by the channel number and angle. The PCA9685 controller supports up to 16 servo channels.
+
+Q: Set servo angle
+A: Servo control uses the servo command followed by the channel number and angle. The PCA9685 controller supports up to 16 servo channels.
+
+Q: servo
+A: Servo control uses the servo command followed by the channel number and angle. The PCA9685 controller supports up to 16 servo channels.
+
+Q: What is the gesture sensor
+A: The APDS9960 has three modes: apdscolor for RGB light readings, apdsproximity for proximity detection, and apdsgesture for up, down, left, and right gesture detection.
+
+Q: gestures
+A: The APDS9960 has three modes: apdscolor for RGB light readings, apdsproximity for proximity detection, and apdsgesture for up, down, left, and right gesture detection.
+
+Q: light sensor
+A: The APDS9960 has three modes: apdscolor for RGB light readings, apdsproximity for proximity detection, and apdsgesture for up, down, left, and right gesture detection.
+
+Q: color sensor
+A: The APDS9960 has three modes: apdscolor for RGB light readings, apdsproximity for proximity detection, and apdsgesture for up, down, left, and right gesture detection.
+
+Q: How to use the temperature sensor
+A: The BME280 environmental sensor measures temperature, humidity, and barometric pressure. Use openbme to start it and bmeread for readings.
+
+Q: temp
+A: The BME280 environmental sensor measures temperature, humidity, and barometric pressure. Use openbme to start it and bmeread for readings.
+
+Q: temp?
+A: The BME280 environmental sensor measures temperature, humidity, and barometric pressure. Use openbme to start it and bmeread for readings.
+
+Q: humidity
+A: The BME280 environmental sensor measures temperature, humidity, and barometric pressure. Use openbme to start it and bmeread for readings.
+
+Q: Read motion data
+A: The BNO055 9-DoF orientation sensor provides accelerometer, gyroscope, and magnetometer data. Use openimu to start it, then imuread to take a reading.
+
+Q: Check the accelerometer
+A: The BNO055 9-DoF orientation sensor provides accelerometer, gyroscope, and magnetometer data. Use openimu to start it, then imuread to take a reading.
+
+Q: motion
+A: The BNO055 9-DoF orientation sensor provides accelerometer, gyroscope, and magnetometer data. Use openimu to start it, then imuread to take a reading.
+
+Q: Use the real time clock
+A: The DS3231 real-time clock provides a hardware clock. Use openrtc to start it, then rtcread to get the current time.
+
+Q: Read the hardware clock
+A: The DS3231 real-time clock provides a hardware clock. Use openrtc to start it, then rtcread to get the current time.
+
+Q: rtc
+A: The DS3231 real-time clock provides a hardware clock. Use openrtc to start it, then rtcread to get the current time.
+
+Q: Reset the I2C bus
+A: The I2C bus can be reset with i2c reset. This can help if a sensor becomes unresponsive without needing to reboot.
+
+Q: I2C not working
+A: The I2C bus can be reset with i2c reset. This can help if a sensor becomes unresponsive without needing to reboot.
+
+Q: Sensor not responding
+A: The I2C bus can be reset with i2c reset. This can help if a sensor becomes unresponsive without needing to reboot.
+
+Q: Scan I2C bus
+A: The I2C bus can be scanned with i2c scan to list all detected devices with their addresses.
+
+Q: What I2C devices are connected
+A: The I2C bus can be scanned with i2c scan to list all detected devices with their addresses.
+
+Q: I2C scan
+A: The I2C bus can be scanned with i2c scan to list all detected devices with their addresses.
+
+Q: i2c
+A: The I2C bus can be scanned with i2c scan to list all detected devices with their addresses.
+
+Q: Show thermal image
+A: The MLX90640 32 by 24 thermal camera provides live heatmaps. Use openthermal to start it and closethermal to stop it.
+
+Q: Use the thermal camera
+A: The MLX90640 32 by 24 thermal camera provides live heatmaps. Use openthermal to start it and closethermal to stop it.
+
+Q: thermal
+A: The MLX90640 32 by 24 thermal camera provides live heatmaps. Use openthermal to start it and closethermal to stop it.
+
+Q: heatmap
+A: The MLX90640 32 by 24 thermal camera provides live heatmaps. Use openthermal to start it and closethermal to stop it.
+
+Q: Turn the LED off
+A: The NeoPixel LED can be turned off with ledcolor off.
+
+Q: LED off
+A: The NeoPixel LED can be turned off with ledcolor off.
+
+Q: Turn off the light
+A: The NeoPixel LED can be turned off with ledcolor off.
+
+Q: led off
+A: The NeoPixel LED can be turned off with ledcolor off.
+
+Q: Change the LED color
+A: The NeoPixel LED color can be set with ledcolor followed by a color name. For example, ledcolor red or ledcolor blue.
+
+Q: Set LED to red
+A: The NeoPixel LED color can be set with ledcolor followed by a color name. For example, ledcolor red or ledcolor blue.
+
+Q: led
+A: The NeoPixel LED color can be set with ledcolor followed by a color name. For example, ledcolor red or ledcolor blue.
+
+Q: led red
+A: The NeoPixel LED color can be set with ledcolor followed by a color name. For example, ledcolor red or ledcolor blue.
+
+Q: screen
+A: The OLED display can be controlled with oled on, oled off, and oled brightness followed by a value.
+
+Q: display
+A: The OLED display can be controlled with oled on, oled off, and oled brightness followed by a value.
+
+Q: oled
+A: The OLED display can be controlled with oled on, oled off, and oled brightness followed by a value.
+
+Q: Turn the screen off
+A: The OLED display can be turned off with oled off.
+
+Q: Screen off
+A: The OLED display can be turned off with oled off.
+
+Q: screen off
+A: The OLED display can be turned off with oled off.
+
+Q: Turn the screen on
+A: The OLED display can be turned on with oled on.
+
+Q: Screen on
+A: The OLED display can be turned on with oled on.
+
+Q: Open the menu
+A: The OLED main menu can be opened with oled menu.
+
+Q: Show the OLED menu
+A: The OLED main menu can be opened with oled menu.
+
+Q: Show my coordinates
+A: The PA1010D GPS module provides location data. Use opengps to start it, then gpsread to get the current position.
+
+Q: Start GPS
+A: The PA1010D GPS module provides location data. Use opengps to start it, then gpsread to get the current position.
+
+Q: gps
+A: The PA1010D GPS module provides location data. Use opengps to start it, then gpsread to get the current position.
+
+Q: location
+A: The PA1010D GPS module provides location data. Use opengps to start it, then gpsread to get the current position.
+
+Q: radio
+A: The RDA5807 FM radio can be tuned with openfmradio to start it, then fmradio tune followed by the frequency in MHz.
+
+Q: Listen to radio
+A: The RDA5807 FM radio can be tuned with openfmradio to start it, then fmradio tune followed by the frequency in MHz. For example, fmradio tune 101.5.
+
+Q: Tune the FM radio
+A: The RDA5807 FM radio can be tuned with openfmradio to start it, then fmradio tune followed by the frequency in MHz. For example, fmradio tune 101.5.
+
+Q: Is someone in the room
+A: The STHS34PF80 IR presence sensor can detect room occupancy. Use openpresence to start it, then presenceread to check for presence or motion in the area.
+
+Q: presence
+A: The STHS34PF80 IR presence sensor can detect room occupancy. Use openpresence to start it, then presenceread to check for presence or motion in the area.
+
+Q: anyone there
+A: The STHS34PF80 IR presence sensor can detect room occupancy. Use openpresence to start it, then presenceread to check for presence or motion in the area.
+
+Q: anybody around
+A: The STHS34PF80 IR presence sensor can detect room occupancy. Use openpresence to start it, then presenceread to check for presence or motion in the area.
+
+Q: Measure distance
+A: The VL53L4CX time-of-flight sensor measures distance up to 6 metres. Use opentof to start it, then tofread to take a reading.
+
+Q: How far away is something
+A: The VL53L4CX time-of-flight sensor measures distance up to 6 metres. Use opentof to start it, then tofread to take a reading.
+
+Q: distance
+A: The VL53L4CX time-of-flight sensor measures distance up to 6 metres. Use opentof to start it, then tofread to take a reading.
+
+Q: how far
+A: The VL53L4CX time-of-flight sensor measures distance up to 6 metres. Use opentof to start it, then tofread to take a reading.
+
+Q: How much space is left
+A: The filesystem usage can be checked with fsusage to see the total and available space on the device.
+
+Q: Disk space
+A: The filesystem usage can be checked with fsusage to see the total and available space on the device.
+
+Q: storage
+A: The filesystem usage can be checked with fsusage to see the total and available space on the device.
+
+Q: disk
+A: The filesystem usage can be checked with fsusage to see the total and available space on the device.
+
+Q: Add a user
+A: User accounts can be created with users add followed by the username and password. This requires admin privileges.
+
+Q: Create a new account
+A: User accounts can be created with users add followed by the username and password. This requires admin privileges.
+
+Q: Show users
+A: User accounts can be listed with users list to see all accounts and their roles.
+
+Q: Who has access
+A: User accounts can be listed with users list to see all accounts and their roles.
+
+Q: users
+A: User accounts can be listed with users list to see all accounts and their roles.
+
+Q: Delete a user
+A: User accounts can be removed with users delete followed by the username.
+
+Q: Remove a user account
+A: User accounts can be removed with users delete followed by the username.
+
+Q: Change a user password
+A: User accounts passwords can be changed with users passwd followed by the username and new password.
+
+Q: Reset password
+A: User accounts passwords can be changed with users passwd followed by the username and new password.
+
+Q: Stop wifi
+A: WiFi can be disabled with wifi off. Use wifi on to re-enable it.
+
+Q: Disable the wifi connection
+A: WiFi can be disabled with wifi off. Use wifi on to re-enable it.
+
+Q: wifi off
+A: WiFi can be disabled with wifi off. Use wifi on to re-enable it.
+
+Q: no wifi
+A: WiFi can be disabled with wifi off. Use wifi on to re-enable it.
+
+Q: Disconnect wifi
+A: WiFi can be disconnected with wifi disconnect to leave the current network.
+
+Q: Leave the network
+A: WiFi can be disconnected with wifi disconnect to leave the current network.
+
+Q: Turn on wifi
+A: WiFi can be enabled with wifi on after credentials are saved with setssid and setpass.
+
+Q: Enable wifi
+A: WiFi can be enabled with wifi on after credentials are saved with setssid and setpass.
+
+Q: Start wifi
+A: WiFi can be enabled with wifi on after credentials are saved with setssid and setpass.
+
+Q: wifi on
+A: WiFi can be enabled with wifi on after credentials are saved with setssid and setpass.
+
+Q: How to connect to wireless
+A: WiFi credentials are saved with setssid and setpass. Then use wifi connect to connect to the saved network.
+
+Q: Get online
+A: WiFi credentials are saved with setssid and setpass. Then use wifi connect to connect to the saved network.
+
+Q: get online
+A: WiFi credentials are saved with setssid and setpass. Then use wifi connect to connect to the saved network.
+
+Q: setup wifi
+A: WiFi credentials are saved with setssid and setpass. Then use wifi connect to connect to the saved network.
+
+Q: Set wifi password
+A: WiFi credentials are saved with setssid followed by your network name, then setpass followed by your password. Then use wifi connect to connect.
+
+Q: Change wifi credentials
+A: WiFi credentials are saved with setssid followed by your network name, then setpass followed by your password. Then use wifi connect to connect.
+
+Q: Save my wifi details
+A: WiFi credentials are saved with setssid followed by your network name, then setpass followed by your password. Then use wifi connect to connect.
+
+Q: Scan for wifi
+A: WiFi networks can be scanned with wifi scan to list nearby access points and their signal strength.
+
+Q: List available networks
+A: WiFi networks can be scanned with wifi scan to list nearby access points and their signal strength.
+
+Q: do a scan
+A: WiFi networks can be scanned with wifi scan to list nearby access points and their signal strength.
+
+Q: scan
+A: WiFi networks can be scanned with wifi scan to list nearby access points and their signal strength.
+
+Q: signal strength
+A: WiFi signal strength is shown with the wifi command. Look at the RSSI value. Below -80 means weak signal, move closer to the router.
+
+Q: rssi
+A: WiFi signal strength is shown with the wifi command. Look at the RSSI value. Below -80 means weak signal, move closer to the router.
+
+Q: What is the wifi status
+A: WiFi status can be checked with the wifi command to show the current connection status, IP address, and signal strength.
+
+Q: Check wifi
+A: WiFi status can be checked with the wifi command to show the current connection status, IP address, and signal strength.
+
+Q: wifi
+A: WiFi status can be checked with the wifi command to show the current connection status, IP address, and signal strength.
+
+Q: wifi?
+A: WiFi status can be checked with the wifi command to show the current connection status, IP address, and signal strength.

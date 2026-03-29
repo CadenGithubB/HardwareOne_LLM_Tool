@@ -238,10 +238,16 @@ def run_qa_test(model, tokenizer, label: str) -> None:
             input_ids = tokenizer.encode(prompt_text, return_tensors="pt").to(device)
             prompt_len = int(input_ids.shape[1])
             attn = torch.ones_like(input_ids, dtype=torch.long)
+            # Cap new tokens well below seq_len — the prompt already occupies
+            # some positions, and n_positions == seq_len == 128.  If total
+            # context exceeds n_positions the GPU positional-embedding lookup
+            # goes out of bounds and triggers a CUDA device-side assertion that
+            # poisons the context for the rest of the process (killing Phase 2).
+            safe_max_new = max(16, model.config.n_positions - prompt_len - 4)
             gen_kw: dict = dict(
                 input_ids=input_ids,
                 attention_mask=attn,
-                max_new_tokens=128,
+                max_new_tokens=safe_max_new,
                 do_sample=True,
                 temperature=0.5,
                 top_p=0.8,
