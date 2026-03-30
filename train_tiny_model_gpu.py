@@ -96,6 +96,28 @@ PRESETS: dict[str, dict[str, int]] = {
     # PSRAM budget at ctx=64: ~4.7 MB weights + ~1.3 MB KV cache = ~6.9 MB total (~1 MB headroom).
     # Use this when narrow fails to associate answers with the right topic.
     "narrow2":  {"vocab_size": 4096,  "n_embd": 128, "n_layer": 20, "n_head": 4,  "seq_len": 128, "n_inner": 640},
+    # "narrow3":  4K vocab / dim=128 / 18 layers / n_head=4 / n_inner=768 — wider FFN variant.
+    "narrow3":  {"vocab_size": 4096,  "n_embd": 128, "n_layer": 18, "n_head": 4,  "seq_len": 128, "n_inner": 768},
+    # "narrow3_short": same as narrow3 but seq_len=64 for single-turn Q&A.
+    "narrow3_short": {"vocab_size": 4096, "n_embd": 128, "n_layer": 18, "n_head": 4, "seq_len": 64, "n_inner": 768},
+    # "HW1HelpAgent": 4K vocab / dim=128 / 22 layers / n_head=4 / n_inner=768 — Hardware One help agent.
+    # 22 layers fits ctx=64 in 8 MB PSRAM. Wide FFN (768, 6x dim) for factual precision.
+    "HW1HelpAgent": {"vocab_size": 4096, "n_embd": 128, "n_layer": 22, "n_head": 4, "seq_len": 128, "n_inner": 768},
+    # "HW1HelpAgent_slim": same as HW1HelpAgent but FFN trimmed 768->720 (~264KB smaller).
+    # Use when the full 768 model is too tight on PSRAM.
+    "HW1HelpAgent_slim": {"vocab_size": 4096, "n_embd": 128, "n_layer": 22, "n_head": 4, "seq_len": 128, "n_inner": 720},
+    # "HW1HelpAgent192": dim=192 / 12 layers / 6 heads / FFN=768 — middle ground between 128 and 256.
+    # 2.25× representational capacity vs dim=128 while keeping 12 layers of depth.
+    # Fits 8 MB PSRAM with ctx=64: ~6142KB weights + 325KB fp + 1152KB kv + 35KB act ≈ 7654KB.
+    "HW1HelpAgent192": {"vocab_size": 4096, "n_embd": 192, "n_layer": 12, "n_head": 6, "seq_len": 128, "n_inner": 768},
+    # "HW1HelpAgent192_deep": dim=192 / 18 layers / 6 heads / FFN=320 — recommended for Hardware One.
+    # FFN=320 (1.67×dim) trades width for 18 layers of depth: +6 layers vs HW1HelpAgent192.
+    # Verified PSRAM fit at ctx=64: ~7459 KB total with ~733 KB headroom on 8 MB ESP32-S3.
+    "HW1HelpAgent192_deep": {"vocab_size": 4096, "n_embd": 192, "n_layer": 18, "n_head": 6, "seq_len": 128, "n_inner": 320},
+    # "HW1HelpAgent256": dim=256 / 8 layers / 8 heads / FFN=768 — wider representation for better topic separation.
+    # 4× representational capacity vs dim=128 at the cost of depth (8 vs 22 layers).
+    # Fits 8 MB PSRAM with ctx=64: ~6336KB weights + 234KB fp + 1024KB kv + 46KB act ≈ 7640KB.
+    "HW1HelpAgent256": {"vocab_size": 4096, "n_embd": 256, "n_layer": 8, "n_head": 8, "seq_len": 128, "n_inner": 768},
 }
 
 _ARG_TO_FLAG = {
@@ -281,13 +303,14 @@ def run_qa_test(model, tokenizer, device, label: str, prompts: list[str] | None 
             input_ids = tokenizer.encode(prompt_text, return_tensors="pt").to(device)
             prompt_len = int(input_ids.shape[1])
             attn = torch.ones_like(input_ids, dtype=torch.long, device=device)
+            # Cap generation so prompt + output never exceeds the position table
+            max_positions = getattr(model.config, 'n_positions', 128)
+            max_new = max(1, max_positions - prompt_len)
             gen_kw: dict = dict(
                 input_ids=input_ids,
                 attention_mask=attn,
-                max_new_tokens=128,
-                do_sample=True,
-                temperature=0.5,
-                top_p=0.8,
+                max_new_tokens=max_new,
+                do_sample=False,
                 repetition_penalty=1.3,
                 pad_token_id=tokenizer.eos_token_id,
             )
@@ -329,7 +352,7 @@ def load_text_dataset(args: argparse.Namespace) -> tuple[list[Path], "Dataset"]:
                 sys.exit(f"Not a file: {p}")
             raw = p.read_text(encoding="utf-8", errors="replace")
             # Split on blank lines so each paragraph is one row; tokenizer then
-            # processes each independently and group_texts chunks into seq_len blocks.
+            # processes each independently and pack_qa_blocks packs into seq_len blocks.
             paragraphs = [blk.strip() for blk in raw.split("\n\n") if blk.strip()]
             rows.extend(paragraphs)
         print(f"Loaded {len(rows)} text paragraphs from {len(args.text)} file(s).")
@@ -554,7 +577,7 @@ def main() -> None:
         )
 
     def tokenize_no_trunc(examples):
-        # For local text files: don't truncate — group_texts will chunk into seq_len blocks.
+        # For local text files: don't truncate — pack_qa_blocks will pack into seq_len blocks.
         return tokenizer(
             examples["text"],
             truncation=False,
@@ -574,29 +597,63 @@ def main() -> None:
 
     block_size = args.seq_len
 
-    def group_texts(examples):
-        all_ids: list[int] = []
+    def pack_qa_blocks(examples):
+        """Pack complete Q&A pairs into blocks without splitting any entry.
+
+        Unlike the naive concatenate-and-chunk approach, this ensures every
+        Q&A pair stays intact within a single training block.  Entries are
+        separated by EOS tokens so the model learns answer boundaries.
+        Blocks are padded to block_size; labels use -100 on padding so
+        the loss ignores those positions.
+        """
+        blocks = []
+        labels_list = []
+        current: list[int] = []
+
         for ids in examples["input_ids"]:
-            all_ids.extend(ids)
-        total_length = len(all_ids)
-        if total_length < block_size:
-            return {"input_ids": [], "labels": []}
-        total_length = (total_length // block_size) * block_size
-        chunks = [all_ids[i : i + block_size] for i in range(0, total_length, block_size)]
-        return {"input_ids": chunks, "labels": [c[:] for c in chunks]}
+            if not ids:
+                continue
+            entry = list(ids[:block_size]) if len(ids) > block_size else list(ids)
+            # +1 for EOS separator between entries within a block
+            space_needed = len(entry) + (1 if current else 0)
+
+            if current and len(current) + space_needed > block_size:
+                # Finalize current block: pad to block_size
+                real_len = len(current)
+                pad_len = block_size - real_len
+                labels_list.append(current[:] + [-100] * pad_len)
+                blocks.append(current + [eos_id] * pad_len)
+                current = []
+
+            if current:
+                current.append(eos_id)
+            current.extend(entry)
+
+        if current and len(current) >= 4:
+            real_len = len(current)
+            pad_len = block_size - real_len
+            labels_list.append(current[:] + [-100] * pad_len)
+            blocks.append(current + [eos_id] * pad_len)
+
+        return {"input_ids": blocks, "labels": labels_list}
 
     rm_cols = [c for c in tok_ds.column_names if c != "input_ids"]
     lm_ds = tok_ds.map(
-        group_texts,
+        pack_qa_blocks,
         batched=True,
         batch_size=10_000,
         remove_columns=rm_cols,
     )
     lm_ds = lm_ds.filter(lambda ex: len(ex["input_ids"]) > 0)
     if len(lm_ds) == 0:
-        sys.exit("No training blocks after grouping — use more samples or lower --seq-len.")
+        sys.exit("No training blocks after packing — use more samples or lower --seq-len.")
 
     collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
+
+    # Compute warmup steps: ramp LR from ~0 over the first 6% of training
+    _steps_per_epoch = max(1, len(lm_ds) // args.batch_size)
+    _total_steps = int(_steps_per_epoch * args.epochs // args.grad_accum)
+    _warmup_steps = max(1, int(_total_steps * 0.06))
 
     ta_kw: dict = dict(
         output_dir=str(out_dir / "trainer_ckpt"),
@@ -604,6 +661,8 @@ def main() -> None:
         per_device_train_batch_size=args.batch_size,
         gradient_accumulation_steps=args.grad_accum,
         learning_rate=args.lr,
+        warmup_steps=_warmup_steps,                # ramp LR from ~0 over first 6% of steps
+        weight_decay=0.01,                         # L2 regularization — prevents weight explosion
         logging_steps=50,
         save_steps=5_000,
         save_total_limit=2,
@@ -624,7 +683,7 @@ def main() -> None:
 
     n_params = sum(p.numel() for p in model.parameters())
     print(f"Model: {n_params:,} parameters  |  batch={args.batch_size}  |  epochs={args.epochs}")
-    print(f"Dataset: {len(lm_ds):,} blocks of {args.seq_len} tokens")
+    print(f"Dataset: {len(lm_ds):,} blocks (up to {args.seq_len} tokens, complete Q&A pairs)")
     steps_per_epoch = max(1, len(lm_ds) // args.batch_size)
     total_steps = int(steps_per_epoch * args.epochs // args.grad_accum)
     print(f"Estimated steps: ~{total_steps:,}")
@@ -784,7 +843,7 @@ def main() -> None:
                 batched=True, remove_columns=["text"],
             )
             rm_cols2 = [c for c in tok_combined.column_names if c != "input_ids"]
-            lm_combined = tok_combined.map(group_texts, batched=True, batch_size=10_000, remove_columns=rm_cols2)
+            lm_combined = tok_combined.map(pack_qa_blocks, batched=True, batch_size=10_000, remove_columns=rm_cols2)
             lm_combined = lm_combined.filter(lambda ex: len(ex["input_ids"]) > 0)
             print(f"  Combined blocks: {len(lm_combined):,} of {args.seq_len} tokens")
 
@@ -799,11 +858,22 @@ def main() -> None:
             ta_kw2.pop("max_steps", None)  # no step limit for phase 2
 
             training_args2 = TrainingArguments(**ta_kw2)
+
+            # Reuse Phase 1 optimizer to preserve Adam momentum/variance.
+            # Only the LR changes; the optimizer's learned gradient statistics
+            # carry over so Phase 2 doesn't start from a cold optimizer.
+            p1_optimizer = getattr(trainer, 'optimizer', None)
+            if p1_optimizer is not None:
+                for pg in p1_optimizer.param_groups:
+                    pg['lr'] = neg_lr
+                print(f"  Carrying over Phase 1 optimizer state (Adam momentum preserved)")
+
             trainer2 = Trainer(
                 model=model,  # continues from phase 1 weights
                 args=training_args2,
                 train_dataset=lm_combined,
                 data_collator=collator,
+                optimizers=(p1_optimizer, None) if p1_optimizer else (None, None),
             )
 
             print("Phase 2 training…")

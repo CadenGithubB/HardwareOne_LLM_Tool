@@ -1,0 +1,122 @@
+ESP32-S3 On-Device LLM — Training & Converter Package
+=======================================================
+
+
+STEP 1 — Install dependencies (once)
+--------------------------------------
+
+    pip install -r requirements.txt
+
+On GPU machines, install PyTorch for your CUDA version first:
+
+    CUDA 12.1:  pip install torch --index-url https://download.pytorch.org/whl/cu121
+    CUDA 12.4:  pip install torch --index-url https://download.pytorch.org/whl/cu124
+
+Verify GPU (optional):  python -c "import torch; print(torch.cuda.is_available())"
+
+
+STEP 2 — Train the model
+--------------------------
+
+Use HW1HelpAgent192_deep for best quality: 18 layers, dim=192, 6 heads, FFN=320, seq=128.
+Or use HW1HelpAgent for the proven narrow model: 22 layers, dim=128, 4 heads, FFN=768.
+
+GPU training (recommended):
+
+    python train_tiny_model_gpu.py \
+        --preset HW1HelpAgent192_deep \
+        --text hardwareone_rich.txt \
+        --negatives training_data/hardwareone_qa_negatives.txt \
+        --epochs 8 --lr 3e-4 --batch-size 16 \
+        --out ./out_HW1HelpAgent192_deep
+
+CPU training (slow, use only if no GPU available):
+
+    python train_tiny_model.py \
+        --preset HW1HelpAgent192_deep \
+        --text hardwareone_rich.txt \
+        --negatives training_data/hardwareone_qa_negatives.txt \
+        --epochs 300 --batch-size 8 --lr 3e-4 \
+        --neg-epochs 30 \
+        --out ./out_HW1HelpAgent192_deep
+
+Phase 1 trains on positive Q&A data. Loss should fall from ~7 down to ~0.1-0.3.
+The script runs a Q&A test after Phase 1 completes.
+
+Phase 2 continues from Phase 1 weights on combined positive + negative data.
+Teaches the model to distinguish similar-sounding topics (e.g. ESP-NOW vs WiFi).
+The --neg-lr defaults to half of --lr, which is intentionally conservative.
+
+To check model size before training:
+
+    python train_tiny_model_gpu.py --preset HW1HelpAgent --estimate-only
+
+
+STEP 3 — Convert to model.bin (browser tool)
+---------------------------------------------
+
+3a. Open index.html in Chrome or Edge (Firefox works too).
+    No server needed — open the file directly from disk.
+
+3b. Drop the entire output folder (./out_HW1HelpAgent) onto the page, or use
+    the file picker to select the files inside it.
+
+3c. Select INT8 quantization, group size 128. These are the defaults.
+
+3d. Click Convert. When finished, click Download.
+    This saves model.bin.
+
+
+STEP 4 — Copy to device
+-------------------------
+
+4a. Copy model.bin to the SD card at /sd/llm/ or upload via the web Files page.
+
+4b. Open the LLM tab in the web dashboard, select the model, and click Load.
+    Or from the CLI: llm load /sd/llm/model.bin
+
+4c. Expected log output: [LLM] Model ready. PSRAM used: ~6900KB
+
+
+STEP 5 — Use the LLM
+----------------------
+
+Ask questions from the LLM tab in the web dashboard or from the CLI:
+
+    llm generate "What is Hardware One?"
+
+The firmware stops generation after 2 sentences or 80 tokens (configurable).
+
+
+TRAINING DATA FILES
+--------------------
+
+    hardwareone_rich.txt                  Complete training corpus (Q&A pairs,
+                                          passages, stories, conversations).
+                                          This is a static file — edit it
+                                          directly to change training data.
+
+    training_data/
+        hardwareone_qa_negatives.txt      Out-of-domain corrections (phase 2)
+
+All Q&A pairs use Q:/A: format. Answers are 30 words or less to fit within
+the model's context window.
+
+
+PRESET REFERENCE
+-----------------
+
+Name                Vocab  Layers  dim  FFN   seq   Est. INT8 PSRAM
+------------------  -----  ------  ---  ----  ----  ---------------
+HW1HelpAgent192_deep 4K    18      192  320   128   ~7.3 MB  <- recommended
+HW1HelpAgent        4K     22      128  768   128   ~7.5 MB
+HW1HelpAgent192     4K     12      192  768   128   ~7.6 MB
+HW1HelpAgent256     4K      8      256  768   128   ~7.8 MB
+narrow3              4K     18      128  768   128   ~6.9 MB
+narrow3_short        4K     18      128  768    64   ~6.5 MB
+narrow2              4K     20      128  640   128   ~6.9 MB
+narrow               4K      8      256  512   128   ~7.3 MB
+stretch2             8K     20      128  640   128   ~8.1 MB  (tight, may OOM)
+stretch              8K     18      128  512   128   ~7.4 MB
+leaner               8K     15      128  512   128   ~6.0 MB
+baseline             16K    12      128  512   128   ~6.4 MB

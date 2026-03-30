@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dim=128 vs dim=192 vs dim=256 — Architecture Comparison</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a0f; color: #e0e0e0; font-family: 'SF Mono', 'Fira Code', monospace; padding: 20px; }
+h1 { text-align: center; font-size: 1.4em; margin-bottom: 5px; color: #fff; }
+.subtitle { text-align: center; color: #888; font-size: 0.85em; margin-bottom: 30px; }
+
+.container { display: flex; gap: 30px; justify-content: center; flex-wrap: wrap; }
+.model-col { display: flex; flex-direction: column; align-items: center; min-width: 220px; }
+.model-title { font-size: 1.1em; font-weight: bold; margin-bottom: 4px; }
+.model-subtitle { font-size: 0.75em; color: #888; margin-bottom: 15px; }
+
+.model-col.dim128 .model-title { color: #5b9bd5; }
+.model-col.dim192 .model-title { color: #9b59b6; }
+.model-col.dim256 .model-title { color: #e67e22; }
+
+/* Token embedding */
+.embedding { border-radius: 6px; text-align: center; font-size: 0.7em; padding: 8px 4px; margin-bottom: 6px; border: 1px solid; display: flex; flex-direction: column; gap: 2px; }
+.dim128 .embedding { background: #1a2a3a; border-color: #5b9bd5; width: 128px; }
+.dim192 .embedding { background: #2a1a3a; border-color: #9b59b6; width: 192px; }
+.dim256 .embedding { background: #3a2a1a; border-color: #e67e22; width: 256px; }
+.embedding .label { font-weight: bold; }
+.embedding .size { color: #aaa; font-size: 0.85em; }
+
+/* Transformer layers */
+.layer-stack { display: flex; flex-direction: column; gap: 3px; margin-bottom: 6px; }
+.layer { border-radius: 4px; text-align: center; font-size: 0.6em; padding: 4px 2px; border: 1px solid; position: relative; display: flex; flex-direction: column; gap: 1px; }
+.dim128 .layer { background: #12202e; border-color: #3a6a9a; width: 128px; }
+.dim192 .layer { background: #1e1230; border-color: #6a3a8a; width: 192px; }
+.dim256 .layer { background: #2e1e12; border-color: #9a6a3a; width: 256px; }
+
+.layer .layer-num { font-weight: bold; font-size: 1.1em; }
+
+/* Attention detail inside layer */
+.attn-row { display: flex; gap: 1px; justify-content: center; margin: 2px 0; }
+.head { border-radius: 2px; font-size: 0.85em; padding: 1px 2px; text-align: center; flex: 1; }
+.dim128 .head { background: #1e3550; color: #7bb8e8; }
+.dim192 .head { background: #301e50; color: #b87be8; }
+.dim256 .head { background: #503018; color: #e8b87b; }
+
+.ffn-bar { border-radius: 2px; height: 6px; margin: 2px auto; }
+.dim128 .ffn-bar { background: linear-gradient(90deg, #2a4a6a, #5b9bd5); width: 100%; }
+.dim192 .ffn-bar { background: linear-gradient(90deg, #3a2a5a, #9b59b6); width: 100%; }
+.dim256 .ffn-bar { background: linear-gradient(90deg, #5a3a1a, #e67e22); width: 100%; }
+
+.layer .detail { color: #777; font-size: 0.85em; }
+
+/* Final norm + LM head */
+.final { border-radius: 6px; text-align: center; font-size: 0.7em; padding: 8px 4px; border: 1px solid; display: flex; flex-direction: column; gap: 2px; }
+.dim128 .final { background: #1a2a3a; border-color: #5b9bd5; width: 128px; }
+.dim192 .final { background: #2a1a3a; border-color: #9b59b6; width: 192px; }
+.dim256 .final { background: #3a2a1a; border-color: #e67e22; width: 256px; }
+
+/* Stats table */
+.stats { margin-top: 40px; max-width: 900px; margin-left: auto; margin-right: auto; }
+.stats h2 { text-align: center; margin-bottom: 15px; font-size: 1.1em; }
+table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+th, td { padding: 8px 12px; border: 1px solid #333; text-align: center; }
+th { background: #1a1a2a; color: #aaa; }
+td { background: #111118; }
+.highlight128 { color: #5b9bd5; font-weight: bold; }
+.highlight192 { color: #9b59b6; font-weight: bold; }
+.highlight256 { color: #e67e22; font-weight: bold; }
+
+/* Token representation visual */
+.token-viz { margin-top: 40px; max-width: 900px; margin-left: auto; margin-right: auto; }
+.token-viz h2 { text-align: center; margin-bottom: 15px; font-size: 1.1em; }
+.token-row { display: flex; align-items: center; gap: 15px; margin-bottom: 12px; }
+.token-label { width: 100px; text-align: right; font-size: 0.8em; color: #aaa; }
+.token-bar-container { flex: 1; }
+.token-bar { height: 18px; border-radius: 3px; display: flex; align-items: center; padding-left: 8px; font-size: 0.7em; }
+.token-bar.d128 { background: linear-gradient(90deg, #1a3a5a, #5b9bd5); width: 50%; }
+.token-bar.d192 { background: linear-gradient(90deg, #2a1a4a, #9b59b6); width: 75%; }
+.token-bar.d256 { background: linear-gradient(90deg, #3a2a0a, #e67e22); width: 100%; }
+
+/* Concept separation visual */
+.concept-viz { margin-top: 40px; max-width: 900px; margin-left: auto; margin-right: auto; padding-bottom: 40px; }
+.concept-viz h2 { text-align: center; margin-bottom: 5px; font-size: 1.1em; }
+.concept-viz .note { text-align: center; color: #888; font-size: 0.75em; margin-bottom: 20px; }
+.concept-row { display: flex; gap: 20px; justify-content: center; margin-bottom: 20px; }
+.concept-box { border-radius: 8px; padding: 15px; text-align: center; width: 280px; }
+.concept-box h3 { font-size: 0.9em; margin-bottom: 10px; }
+.concept-box.c128 { background: #0d1a28; border: 1px solid #3a6a9a; }
+.concept-box.c128 h3 { color: #5b9bd5; }
+.concept-box.c192 { background: #1a0d28; border: 1px solid #6a3a8a; }
+.concept-box.c192 h3 { color: #9b59b6; }
+.concept-box.c256 { background: #281a0d; border: 1px solid #9a6a3a; }
+.concept-box.c256 h3 { color: #e67e22; }
+
+.concept-dots { position: relative; height: 120px; margin: 5px 0; }
+.dot { position: absolute; width: 10px; height: 10px; border-radius: 50%; font-size: 0; }
+.dot-label { position: absolute; font-size: 0.6em; white-space: nowrap; }
+
+/* Layer detail expanded */
+.layer-detail { margin-top: 40px; max-width: 900px; margin-left: auto; margin-right: auto; }
+.layer-detail h2 { text-align: center; margin-bottom: 15px; font-size: 1.1em; }
+.detail-row { display: flex; gap: 20px; justify-content: center; margin-bottom: 15px; }
+.detail-card { border-radius: 8px; padding: 15px; width: 280px; font-size: 0.8em; }
+.detail-card.d128 { background: #0d1a28; border: 1px solid #3a6a9a; }
+.detail-card.d192 { background: #1a0d28; border: 1px solid #6a3a8a; }
+.detail-card.d256 { background: #281a0d; border: 1px solid #9a6a3a; }
+.detail-card h3 { margin-bottom: 8px; font-size: 1em; }
+.detail-card.d128 h3 { color: #5b9bd5; }
+.detail-card.d192 h3 { color: #9b59b6; }
+.detail-card.d256 h3 { color: #e67e22; }
+.detail-card .row { display: flex; justify-content: space-between; padding: 2px 0; border-bottom: 1px solid #222; }
+.detail-card .row:last-child { border-bottom: none; }
+.detail-card .val { color: #ccc; }
+
+.arrow { text-align: center; color: #555; font-size: 1.2em; margin: 3px 0; }
+</style>
+</head>
+<body>
+
+<h1>ESP32-S3 LLM Architecture Comparison</h1>
+<div class="subtitle">Same 8 MB PSRAM budget, same training data, different width/depth tradeoffs</div>
+
+<div class="container">
+
+  <!-- dim=128 column -->
+  <div class="model-col dim128">
+    <div class="model-title">dim=128</div>
+    <div class="model-subtitle">HW1HelpAgent_slim &mdash; 22 layers, 4 heads</div>
+
+    <div class="embedding">
+      <span class="label">Token Embedding</span>
+      <span class="size">4096 &times; 128</span>
+    </div>
+    <div class="arrow">&darr;</div>
+
+    <div class="layer-stack">
+      <div class="layer">
+        <span class="layer-num">Layer 0</span>
+        <div class="attn-row">
+          <div class="head">H0</div><div class="head">H1</div><div class="head">H2</div><div class="head">H3</div>
+        </div>
+        <div class="ffn-bar"></div>
+        <span class="detail">FFN: 128&rarr;720&rarr;128</span>
+      </div>
+      <div class="layer">
+        <span class="layer-num">Layer 1</span>
+        <div class="attn-row">
+          <div class="head">H0</div><div class="head">H1</div><div class="head">H2</div><div class="head">H3</div>
+        </div>
+        <div class="ffn-bar"></div>
+        <span class="detail">FFN: 128&rarr;720&rarr;128</span>
+      </div>
+      <div class="layer">
+        <span class="layer-num">Layer 2</span>
+        <div class="attn-row">
+          <div class="head">H0</div><div class="head">H1</div><div class="head">H2</div><div class="head">H3</div>
+        </div>
+        <div class="ffn-bar"></div>
+        <span class="detail">FFN: 128&rarr;720&rarr;128</span>
+      </div>
+      <div class="layer" style="border-style: dashed; background: transparent; color: #555;">
+        <span class="layer-num">&vellip;</span>
+        <span class="detail">Layers 3 &ndash; 19</span>
+      </div>
+      <div class="layer">
+        <span class="layer-num">Layer 20</span>
+        <div class="attn-row">
+          <div class="head">H0</div><div class="head">H1</div><div class="head">H2</div><div class="head">H3</div>
+        </div>
+        <div class="ffn-bar"></div>
+        <span class="detail">FFN: 128&rarr;720&rarr;128</span>
+      </div>
+      <div class="layer">
+        <span class="layer-num">Layer 21</span>
+        <div class="attn-row">
+          <div class="head">H0</div><div class="head">H1</div><div class="head">H2</div><div class="head">H3</div>
+        </div>
+        <div class="ffn-bar"></div>
+        <span class="detail">FFN: 128&rarr;720&rarr;128</span>
+      </div>
+    </div>
+
+    <div class="arrow">&darr;</div>
+    <div class="final">
+      <span class="label">LM Head</span>
+      <span class="size">128 &rarr; vocab</span>
+    </div>
+  </div>
+
+  <!-- dim=192 column -->
+  <div class="model-col dim192">
+    <div class="model-title">dim=192</div>
+    <div class="model-subtitle">HW1HelpAgent192 &mdash; 12 layers, 6 heads</div>
+
+    <div class="embedding">
+      <span class="label">Token Embedding</span>
+      <span class="size">4096 &times; 192</span>
+    </div>
+    <div class="arrow">&darr;</div>
+
+    <div class="layer-stack">
+      <div class="layer">
+        <span class="layer-num">Layer 0</span>
+        <div class="attn-row">
+          <div class="head">H0</div><div class="head">H1</div><div class="head">H2</div><div class="head">H3</div><div class="head">H4</div><div class="head">H5</div>
+        </div>
+        <div class="ffn-bar"></div>
+        <span class="detail">FFN: 192&rarr;768&rarr;192</span>
+      </div>
+      <div class="layer">
+        <span class="layer-num">Layer 1</span>
+        <div class="attn-row">
+          <div class="head">H0</div><div class="head">H1</div><div class="head">H2</div><div class="head">H3</div><div class="head">H4</div><div class="head">H5</div>
+        </div>
+        <div class="ffn-bar"></div>
+        <span class="detail">FFN: 192&rarr;768&rarr;192</span>
+      </div>
+      <div class="layer">
+        <span class="layer-num">Layer 2</span>
+        <div class="attn-row">
+          <div class="head">H0</div><div class="head">H1</div><div class="head">H2</div><div class="head">H3</div><div class="head">H4</div><div class="head">H5</div>
+        </div>
+        <div class="ffn-bar"></div>
+        <span class="detail">FFN: 192&rarr;768&rarr;192</span>
+      </div>
+      <div class="layer" style="border-style: dashed; background: transparent; color: #555;">
+        <span class="layer-num">&vellip;</span>
+        <span class="detail">Layers 3 &ndash; 9</span>
+      </div>
+      <div class="layer">
+        <span class="layer-num">Layer 10</span>
+        <div class="attn-row">
+          <div class="head">H0</div><div class="head">H1</div><div class="head">H2</div><div class="head">H3</div><div class="head">H4</div><div class="head">H5</div>
+        </div>
+        <div class="ffn-bar"></div>
+        <span class="detail">FFN: 192&rarr;768&rarr;192</span>
+      </div>
+      <div class="layer">
+        <span class="layer-num">Layer 11</span>
+        <div class="attn-row">
+          <div class="head">H0</div><div class="head">H1</div><div class="head">H2</div><div class="head">H3</div><div class="head">H4</div><div class="head">H5</div>
+        </div>
+        <div class="ffn-bar"></div>
+        <span class="detail">FFN: 192&rarr;768&rarr;192</span>
+      </div>
+    </div>
+
+    <div class="arrow">&darr;</div>
+    <div class="final">
+      <span class="label">LM Head</span>
+      <span class="size">192 &rarr; vocab</span>
+    </div>
+  </div>
+
+  <!-- dim=256 column -->
+  <div class="model-col dim256">
+    <div class="model-title">dim=256</div>
+    <div class="model-subtitle">HW1HelpAgent256 &mdash; 8 layers, 8 heads</div>
+
+    <div class="embedding">
+      <span class="label">Token Embedding</span>
+      <span class="size">4096 &times; 256</span>
+    </div>
+    <div class="arrow">&darr;</div>
+
+    <div class="layer-stack">
+      <div class="layer">
+        <span class="layer-num">Layer 0</span>
+        <div class="attn-row">
+          <div class="head">H0</div><div class="head">H1</div><div class="head">H2</div><div class="head">H3</div>
+          <div class="head">H4</div><div class="head">H5</div><div class="head">H6</div><div class="head">H7</div>
+        </div>
+        <div class="ffn-bar"></div>
+        <span class="detail">FFN: 256&rarr;768&rarr;256</span>
+      </div>
+      <div class="layer">
+        <span class="layer-num">Layer 1</span>
+        <div class="attn-row">
+          <div class="head">H0</div><div class="head">H1</div><div class="head">H2</div><div class="head">H3</div>
+          <div class="head">H4</div><div class="head">H5</div><div class="head">H6</div><div class="head">H7</div>
+        </div>
+        <div class="ffn-bar"></div>
+        <span class="detail">FFN: 256&rarr;768&rarr;256</span>
+      </div>
+      <div class="layer">
+        <span class="layer-num">Layer 2</span>
+        <div class="attn-row">
+          <div class="head">H0</div><div class="head">H1</div><div class="head">H2</div><div class="head">H3</div>
+          <div class="head">H4</div><div class="head">H5</div><div class="head">H6</div><div class="head">H7</div>
+        </div>
+        <div class="ffn-bar"></div>
+        <span class="detail">FFN: 256&rarr;768&rarr;256</span>
+      </div>
+      <div class="layer" style="border-style: dashed; background: transparent; color: #555;">
+        <span class="layer-num">&vellip;</span>
+        <span class="detail">Layers 3 &ndash; 5</span>
+      </div>
+      <div class="layer">
+        <span class="layer-num">Layer 6</span>
+        <div class="attn-row">
+          <div class="head">H0</div><div class="head">H1</div><div class="head">H2</div><div class="head">H3</div>
+          <div class="head">H4</div><div class="head">H5</div><div class="head">H6</div><div class="head">H7</div>
+        </div>
+        <div class="ffn-bar"></div>
+        <span class="detail">FFN: 256&rarr;768&rarr;256</span>
+      </div>
+      <div class="layer">
+        <span class="layer-num">Layer 7</span>
+        <div class="attn-row">
+          <div class="head">H0</div><div class="head">H1</div><div class="head">H2</div><div class="head">H3</div>
+          <div class="head">H4</div><div class="head">H5</div><div class="head">H6</div><div class="head">H7</div>
+        </div>
+        <div class="ffn-bar"></div>
+        <span class="detail">FFN: 256&rarr;768&rarr;256</span>
+      </div>
+    </div>
+
+    <div class="arrow">&darr;</div>
+    <div class="final">
+      <span class="label">LM Head</span>
+      <span class="size">256 &rarr; vocab</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- Token representation visualization -->
+<div class="token-viz">
+  <h2>What "dim" means: each token is a vector of N numbers</h2>
+  <div class="token-row">
+    <div class="token-label">dim=128</div>
+    <div class="token-bar-container">
+      <div class="token-bar d128">128 dimensions to encode meaning</div>
+    </div>
+  </div>
+  <div class="token-row">
+    <div class="token-label">dim=192</div>
+    <div class="token-bar-container">
+      <div class="token-bar d192">192 dimensions &mdash; 2.25&times; more room</div>
+    </div>
+  </div>
+  <div class="token-row">
+    <div class="token-label">dim=256</div>
+    <div class="token-bar-container">
+      <div class="token-bar d256">256 dimensions &mdash; 4&times; more room to separate concepts</div>
+    </div>
+  </div>
+</div>
+
+<!-- Concept separation visualization -->
+<div class="concept-viz">
+  <h2>How dim affects topic separation</h2>
+  <div class="note">More dimensions = more room to keep similar concepts apart</div>
+  <div class="concept-row">
+    <div class="concept-box c128">
+      <h3>dim=128 &mdash; cramped</h3>
+      <div class="concept-dots">
+        <div class="dot" style="background:#e74c3c; left:45%; top:35%;"></div>
+        <div class="dot-label" style="color:#e74c3c; left:52%; top:32%;">WiFi</div>
+        <div class="dot" style="background:#3498db; left:50%; top:45%;"></div>
+        <div class="dot-label" style="color:#3498db; left:57%; top:42%;">MQTT</div>
+        <div class="dot" style="background:#2ecc71; left:38%; top:50%;"></div>
+        <div class="dot-label" style="color:#2ecc71; left:20%; top:47%;">ESP-NOW</div>
+        <div class="dot" style="background:#f39c12; left:52%; top:55%;"></div>
+        <div class="dot-label" style="color:#f39c12; left:59%; top:52%;">BLE</div>
+        <div class="dot" style="background:#9b59b6; left:42%; top:62%;"></div>
+        <div class="dot-label" style="color:#9b59b6; left:28%; top:62%;">BME</div>
+        <div class="dot" style="background:#1abc9c; left:55%; top:68%;"></div>
+        <div class="dot-label" style="color:#1abc9c; left:62%; top:65%;">OLED</div>
+        <div class="dot" style="background:#e67e22; left:48%; top:40%;"></div>
+        <div class="dot-label" style="color:#e67e22; left:55%; top:24%;">IMU</div>
+        <div class="dot" style="background:#ecf0f1; left:40%; top:72%;"></div>
+        <div class="dot-label" style="color:#ecf0f1; left:22%; top:75%;">GPS</div>
+      </div>
+      <div style="font-size:0.7em; color:#e74c3c;">Topics overlap &rarr; wrong answers</div>
+    </div>
+    <div class="concept-box c192">
+      <h3>dim=192 &mdash; breathing room</h3>
+      <div class="concept-dots">
+        <div class="dot" style="background:#e74c3c; left:30%; top:20%;"></div>
+        <div class="dot-label" style="color:#e74c3c; left:37%; top:17%;">WiFi</div>
+        <div class="dot" style="background:#3498db; left:65%; top:25%;"></div>
+        <div class="dot-label" style="color:#3498db; left:72%; top:22%;">MQTT</div>
+        <div class="dot" style="background:#2ecc71; left:20%; top:50%;"></div>
+        <div class="dot-label" style="color:#2ecc71; left:5%; top:47%;">ESP-NOW</div>
+        <div class="dot" style="background:#f39c12; left:70%; top:55%;"></div>
+        <div class="dot-label" style="color:#f39c12; left:77%; top:52%;">BLE</div>
+        <div class="dot" style="background:#9b59b6; left:45%; top:70%;"></div>
+        <div class="dot-label" style="color:#9b59b6; left:32%; top:73%;">BME</div>
+        <div class="dot" style="background:#1abc9c; left:75%; top:80%;"></div>
+        <div class="dot-label" style="color:#1abc9c; left:82%; top:77%;">OLED</div>
+        <div class="dot" style="background:#e67e22; left:50%; top:35%;"></div>
+        <div class="dot-label" style="color:#e67e22; left:57%; top:32%;">IMU</div>
+        <div class="dot" style="background:#ecf0f1; left:25%; top:80%;"></div>
+        <div class="dot-label" style="color:#ecf0f1; left:10%; top:83%;">GPS</div>
+      </div>
+      <div style="font-size:0.7em; color:#2ecc71;">Better separation</div>
+    </div>
+    <div class="concept-box c256">
+      <h3>dim=256 &mdash; well separated</h3>
+      <div class="concept-dots">
+        <div class="dot" style="background:#e74c3c; left:15%; top:10%;"></div>
+        <div class="dot-label" style="color:#e74c3c; left:22%; top:7%;">WiFi</div>
+        <div class="dot" style="background:#3498db; left:75%; top:10%;"></div>
+        <div class="dot-label" style="color:#3498db; left:82%; top:7%;">MQTT</div>
+        <div class="dot" style="background:#2ecc71; left:10%; top:50%;"></div>
+        <div class="dot-label" style="color:#2ecc71; left:0%; top:40%;">ESP-NOW</div>
+        <div class="dot" style="background:#f39c12; left:85%; top:55%;"></div>
+        <div class="dot-label" style="color:#f39c12; left:78%; top:62%;">BLE</div>
+        <div class="dot" style="background:#9b59b6; left:40%; top:85%;"></div>
+        <div class="dot-label" style="color:#9b59b6; left:27%; top:88%;">BME</div>
+        <div class="dot" style="background:#1abc9c; left:80%; top:85%;"></div>
+        <div class="dot-label" style="color:#1abc9c; left:82%; top:92%;">OLED</div>
+        <div class="dot" style="background:#e67e22; left:50%; top:15%;"></div>
+        <div class="dot-label" style="color:#e67e22; left:57%; top:12%;">IMU</div>
+        <div class="dot" style="background:#ecf0f1; left:15%; top:85%;"></div>
+        <div class="dot-label" style="color:#ecf0f1; left:0%; top:92%;">GPS</div>
+      </div>
+      <div style="font-size:0.7em; color:#2ecc71;">Clear boundaries &rarr; right answers</div>
+    </div>
+  </div>
+</div>
+
+<!-- Per-layer detail -->
+<div class="layer-detail">
+  <h2>Inside one transformer layer</h2>
+  <div class="detail-row">
+    <div class="detail-card d128">
+      <h3>dim=128 layer</h3>
+      <div class="row"><span>Attention QKV</span><span class="val">128&times;384</span></div>
+      <div class="row"><span>Attention Out</span><span class="val">128&times;128</span></div>
+      <div class="row"><span>Heads</span><span class="val">4 &times; 32d</span></div>
+      <div class="row"><span>FFN Up</span><span class="val">128&rarr;720</span></div>
+      <div class="row"><span>FFN Down</span><span class="val">720&rarr;128</span></div>
+      <div class="row"><span>Weights/layer</span><span class="val">~250 KB</span></div>
+      <div class="row"><span>KV cache/layer</span><span class="val">64 KB</span></div>
+      <div class="row"><span>&times; 22 layers</span><span class="val">5500 KB + 1408 KB</span></div>
+    </div>
+    <div class="detail-card d192">
+      <h3>dim=192 layer</h3>
+      <div class="row"><span>Attention QKV</span><span class="val">192&times;576</span></div>
+      <div class="row"><span>Attention Out</span><span class="val">192&times;192</span></div>
+      <div class="row"><span>Heads</span><span class="val">6 &times; 32d</span></div>
+      <div class="row"><span>FFN Up</span><span class="val">192&rarr;768</span></div>
+      <div class="row"><span>FFN Down</span><span class="val">768&rarr;192</span></div>
+      <div class="row"><span>Weights/layer</span><span class="val">~442 KB</span></div>
+      <div class="row"><span>KV cache/layer</span><span class="val">96 KB</span></div>
+      <div class="row"><span>&times; 12 layers</span><span class="val">5308 KB + 1152 KB</span></div>
+    </div>
+    <div class="detail-card d256">
+      <h3>dim=256 layer</h3>
+      <div class="row"><span>Attention QKV</span><span class="val">256&times;768</span></div>
+      <div class="row"><span>Attention Out</span><span class="val">256&times;256</span></div>
+      <div class="row"><span>Heads</span><span class="val">8 &times; 32d</span></div>
+      <div class="row"><span>FFN Up</span><span class="val">256&rarr;768</span></div>
+      <div class="row"><span>FFN Down</span><span class="val">768&rarr;256</span></div>
+      <div class="row"><span>Weights/layer</span><span class="val">~655 KB</span></div>
+      <div class="row"><span>KV cache/layer</span><span class="val">128 KB</span></div>
+      <div class="row"><span>&times; 8 layers</span><span class="val">5243 KB + 1024 KB</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Stats comparison table -->
+<div class="stats">
+  <h2>Full comparison</h2>
+  <table>
+    <tr>
+      <th></th>
+      <th class="highlight128">dim=128</th>
+      <th class="highlight192">dim=192</th>
+      <th class="highlight256">dim=256</th>
+    </tr>
+    <tr><td>Preset</td><td>HW1HelpAgent_slim</td><td>HW1HelpAgent192</td><td>HW1HelpAgent256</td></tr>
+    <tr><td>Embedding dim</td><td class="highlight128">128</td><td class="highlight192">192</td><td class="highlight256">256</td></tr>
+    <tr><td>Layers</td><td class="highlight128">22</td><td class="highlight192">12</td><td class="highlight256">8</td></tr>
+    <tr><td>Attention heads</td><td>4</td><td>6</td><td>8</td></tr>
+    <tr><td>Head dim</td><td>32</td><td>32</td><td>32</td></tr>
+    <tr><td>FFN inner</td><td>720</td><td>768</td><td>768</td></tr>
+    <tr><td>Parameters</td><td>~5.8M</td><td>~6.1M</td><td>~6.3M</td></tr>
+    <tr><td>INT8 weights</td><td>~6092 KB</td><td>~6142 KB</td><td>~6336 KB</td></tr>
+    <tr><td>KV cache</td><td>1408 KB</td><td>1152 KB</td><td>1024 KB</td></tr>
+    <tr><td>Total PSRAM</td><td>~7822 KB</td><td>~7654 KB</td><td>~7640 KB</td></tr>
+    <tr><td>Repr. capacity</td><td>1&times;</td><td>2.25&times;</td><td>4&times;</td></tr>
+    <tr><td>Processing depth</td><td>22 passes</td><td>12 passes</td><td>8 passes</td></tr>
+    <tr><td>Best for</td><td>Pattern matching</td><td>Balanced</td><td>Topic separation</td></tr>
+  </table>
+</div>
+
+</body>
+</html>
