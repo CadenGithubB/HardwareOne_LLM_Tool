@@ -78,6 +78,26 @@ PRESETS: dict[str, dict[str, int]] = {
     # PSRAM budget at ctx=64: roughly same as narrow2 (~6.9 MB) — wider FFN offsets fewer layers.
     # Recommended over narrow2 for domain Q&A where factual precision matters more than depth.
     "narrow3":  {"vocab_size": 4096,  "n_embd": 128, "n_layer": 18, "n_head": 4, "seq_len": 128, "n_inner": 768},
+    # "narrow3_short": 4K vocab / dim=128 / 18 layers / n_head=4 / n_inner=768 / seq_len=64
+    # Optimized for single-turn Q&A with reduced context window (64 tokens vs 128).
+    # Saves 15-20% PSRAM on KV cache, faster inference, same quality for one-shot Q&A.
+    # PSRAM budget at ctx=64: ~4.7 MB weights + ~0.65 MB KV cache = ~5.4 MB total (~2.6 MB headroom).
+    # Use this when you don't need multi-turn conversation history.
+    "narrow3_short":  {"vocab_size": 4096,  "n_embd": 128, "n_layer": 18, "n_head": 4, "seq_len": 64, "n_inner": 768},
+    # "HW1HelpAgent": 4K vocab / dim=128 / 22 layers / n_head=4 / n_inner=768 — Hardware One help agent.
+    # 22 layers fits ctx=64 in 8 MB PSRAM. Wide FFN (768, 6×dim) for factual precision.
+    # head_size=32 (dim/n_head) for rich attention. Designed for domain Q&A with casual paraphrases.
+    "HW1HelpAgent":   {"vocab_size": 4096,  "n_embd": 128, "n_layer": 22, "n_head": 4, "seq_len": 128, "n_inner": 768},
+    # "HW1HelpAgent_slim": same as HW1HelpAgent but FFN trimmed 768->720 (~264KB smaller).
+    "HW1HelpAgent_slim": {"vocab_size": 4096, "n_embd": 128, "n_layer": 22, "n_head": 4, "seq_len": 128, "n_inner": 720},
+    # "HW1HelpAgent192": dim=192 / 12 layers / 6 heads / FFN=768 — middle ground between 128 and 256.
+    "HW1HelpAgent192": {"vocab_size": 4096, "n_embd": 192, "n_layer": 12, "n_head": 6, "seq_len": 128, "n_inner": 768},
+    # "HW1HelpAgent192_deep": dim=192 / 18 layers / 6 heads / FFN=320 — recommended for Hardware One.
+    # FFN=320 (1.67×dim) trades width for 18 layers of depth: +6 layers vs HW1HelpAgent192.
+    # Verified PSRAM fit at ctx=64: ~7459 KB total with ~733 KB headroom on 8 MB ESP32-S3.
+    "HW1HelpAgent192_deep": {"vocab_size": 4096, "n_embd": 192, "n_layer": 18, "n_head": 6, "seq_len": 128, "n_inner": 320},
+    # "HW1HelpAgent256": dim=256 / 8 layers / 8 heads / FFN=768 — wider representation for better topic separation.
+    "HW1HelpAgent256": {"vocab_size": 4096, "n_embd": 256, "n_layer": 8, "n_head": 8, "seq_len": 128, "n_inner": 768},
 }
 
 # argparse dest → CLI flag (for “only override if user did not pass this flag”)
@@ -286,6 +306,100 @@ def run_qa_test(model, tokenizer, label: str) -> None:
             print()
 
 
+# ── Filler prefix detection ──────────────────────────────────────────────────
+# The firmware strips these phrases from user questions before the model sees
+# them.  Training data must not contain them, or the model learns patterns it
+# will never encounter at inference time.
+_FILLER_PREFIXES = [
+    # Polite/indirect frames
+    "Can you tell me how to ",    "Could you tell me how to ",
+    "Can you show me how to ",    "Could you show me how to ",
+    "I was wondering how to ",    "What is the best way to ",
+    "How would I go about ",      "How do I go about ",
+    "What is the way to ",        "Can you tell me ",
+    "Could you tell me ",         "Please tell me ",
+    "Do you know how to ",        "I was wondering ",
+    "Is there a way to ",         "Is it possible to ",
+    "I would like to ",           "Please help me ",
+    "Tell me how to ",            "I'd like to ",
+    "Do you know ",               "I want to ",
+    "I need to ",                 "Could you ",
+    "Can you ",                   "Help me ",
+    "Tell me ",                   "Please ",
+    # "How do I" — verb+object IS the topic
+    "How do I use the ",          "How do I use ",
+    "How do I check the ",        "How do I check ",
+    "How do I see the ",          "How do I see ",
+    "How do I set up the ",       "How do I set up ",
+    "How do I set the ",          "How do I set ",
+    "How do I get the ",          "How do I get ",
+    "How do I turn on the ",      "How do I turn off the ",
+    "How do I turn on ",          "How do I turn off ",
+    "How do I change the ",       "How do I change ",
+    "How do I enable the ",       "How do I enable ",
+    "How do I disable the ",      "How do I disable ",
+    "How do I connect to ",       "How do I connect ",
+    "How do I create ",           "How do I send ",
+    "How do I add ",              "How do I update ",
+    "How do I delete ",           "How do I remove ",
+    "How do I read ",             "How do I list ",
+    "How do I view ",             "How do I open ",
+    "How do I start ",            "How do I stop ",
+    "How do I save ",             "How do I find ",
+    "How do I configure ",        "How do I measure ",
+    "How do I detect ",           "How do I access ",
+    "How do I make ",             "How do I scan ",
+    "How do I pair ",             "How do I join ",
+    "How do I leave ",            "How do I build ",
+    "How do I flash ",            "How do I assign ",
+    "How do I clear ",            "How do I run ",
+    "How do I log ",              "How do I record ",
+    "How do I schedule ",         "How do I broadcast ",
+    "How do I transfer ",         "How do I switch ",
+    "How do I sync ",             "How do I tune ",
+    "How do I reset ",            "How do I reboot ",
+    "How do I do ",               "How do I ",
+    # "How does" / "What is/are/does" — remainder is topic
+    "How does the ",              "How does ",
+    "What is the ",               "What is a ",
+    "What is an ",                "What is ",
+    "What are the ",              "What are ",
+    "What does the ",             "What does ",
+    # Quantity
+    "How much ",                  "How many ",
+    "How long ",                  "How fast ",
+    "How far ",                   "How often ",
+    "How accurate ",
+]
+
+
+def _check_filler_prefixes(rows: list[str], source_files: list[str]) -> None:
+    """Warn if any Q: lines start with filler phrases the firmware strips."""
+    hits: list[tuple[str, str, str]] = []  # (source_hint, original_q, filler)
+    for row in rows:
+        for line in row.split("\n"):
+            if not line.startswith("Q: "):
+                continue
+            body = line[3:]
+            for filler in _FILLER_PREFIXES:
+                if body.lower().startswith(filler.lower()):
+                    hits.append((", ".join(source_files), line.strip(), filler.strip()))
+                    break
+    if hits:
+        print(f"\n{'='*72}")
+        print(f"WARNING: {len(hits)} Q: line(s) contain filler prefixes that the")
+        print(f"firmware strips at inference time.  The model will never see these")
+        print(f"phrases, so they waste training capacity.  Remove them from your")
+        print(f"training data so it matches what the model sees on-device.")
+        print(f"{'='*72}")
+        for src, q, filler in hits[:20]:  # show first 20
+            print(f"  {q}")
+            print(f"    -> strip \"{filler}\"")
+        if len(hits) > 20:
+            print(f"  ... and {len(hits) - 20} more")
+        print(f"{'='*72}\n")
+
+
 def load_text_dataset(args: argparse.Namespace) -> tuple[list[Path], "Dataset"]:
     """Returns (temp_files_to_cleanup_or_empty, hf_dataset)."""
     from datasets import Dataset
@@ -299,6 +413,13 @@ def load_text_dataset(args: argparse.Namespace) -> tuple[list[Path], "Dataset"]:
             paragraphs = [blk.strip() for blk in raw.split("\n\n") if blk.strip()]
             rows.extend(paragraphs)
         print(f"Loaded {len(rows)} text paragraphs from {len(args.text)} file(s).")
+
+        # ── Check for filler prefixes in Q: lines ──────────────────────────
+        # The firmware strips these phrases before the model sees them, so
+        # training data should not contain them — the model would learn
+        # patterns it never encounters at inference time.
+        _check_filler_prefixes(rows, [str(p) for p in args.text])
+
         return [], Dataset.from_dict({"text": rows})
 
     from datasets import load_dataset

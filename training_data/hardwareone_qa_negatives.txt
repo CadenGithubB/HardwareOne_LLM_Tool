@@ -19,14 +19,14 @@ A: BLE is Bluetooth Low Energy, a short-range radio for communicating with nearb
 Q: Does BLE require a router?
 A: BLE is Bluetooth Low Energy, a short-range radio that communicates directly with nearby devices. It operates independently with no infrastructure required.
 
-Q: Is the BME280 a motion sensor?
-A: The BME280 measures temperature, humidity, and barometric pressure. It is an environmental sensor only.
+Q: Is the MLX90640 a motion sensor?
+A: The MLX90640 is a thermal camera that captures heat maps. It is not a motion sensor. Use the BNO055 IMU for motion detection.
 
-Q: Does the ICM sensor measure temperature?
-A: The ICM-42670-P is an inertial measurement unit that tracks acceleration and angular velocity. It is a motion and orientation sensor only.
+Q: Does the BNO055 measure temperature?
+A: The BNO055 is an inertial measurement unit that tracks acceleration and angular velocity. It is a motion and orientation sensor only.
 
-Q: Is the VL53L1X a temperature sensor?
-A: The VL53L1X is a time-of-flight distance sensor that measures how far away an object is using a laser pulse. It measures distance only.
+Q: Is the VL53L4CX a temperature sensor?
+A: The VL53L4CX is a time-of-flight distance sensor that measures how far away an object is using a laser pulse. It measures distance only.
 
 Q: Does the MLX90614 measure humidity?
 A: The MLX90614 is an infrared thermometer that measures surface temperature without contact. It senses thermal radiation only.
@@ -91,11 +91,11 @@ A: The LLM model file can be stored on the internal LittleFS filesystem. An SD c
 Q: Is Hardware One a cloud device?
 A: Hardware One is a self-contained embedded device. All processing, inference, and storage happen locally on the ESP32-S3.
 
-Q: Does BME280 detect motion?
-A: The BME280 is an environmental sensor that measures temperature, humidity, and barometric pressure. It senses atmospheric conditions only.
+Q: Does the MLX90640 detect motion?
+A: The MLX90640 thermal camera measures infrared radiation for heat mapping. It does not detect motion. Use the BNO055 IMU for motion sensing.
 
-Q: Is the VL53L1X affected by ambient light?
-A: The VL53L1X is a time-of-flight sensor that uses a narrow 940nm laser pulse and measures return time. It is relatively immune to ambient light because it measures timing rather than reflected intensity.
+Q: Is the VL53L4CX affected by ambient light?
+A: The VL53L4CX uses a 940nm laser pulse and measures return time. It is largely immune to ambient light because it measures timing, not intensity.
 
 Q: Does WiFi work in bonded mode?
 A: In bonded mode the device connects as a station to a trusted network. Station-mode connectivity remains fully active with the access point broadcast turned off.
