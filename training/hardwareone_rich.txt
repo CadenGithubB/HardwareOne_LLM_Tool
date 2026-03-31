@@ -11,7 +11,7 @@ Q: How does bonding work?
 A: Bonded mode connects two Hardware One devices so they share command registries. A command typed on one device can execute on the other transparently.
 
 Q: Does it require a cloud connection?
-A: Yes. Hardware One works without internet. It serves its own web dashboard, runs sensors, and runs the LLM entirely on the device.
+A: No. Hardware One works without internet. It serves its own web dashboard, runs sensors, and runs the LLM entirely on the device.
 
 Q: Explain MQTT
 A: MQTT is a lightweight messaging protocol for IoT. Hardware One publishes sensor data to an MQTT broker and can receive commands from subscribed topics.
@@ -69,7 +69,7 @@ Q: How do I remove a rule?
 A: Type automationlist to see the list, then delete the rule by its number.
 
 Q: Does it need the internet?
-A: Yes. Hardware One works without internet. It serves its own web dashboard, runs sensors, and runs the LLM entirely on the device.
+A: No. Hardware One works without internet. It serves its own web dashboard, runs sensors, and runs the LLM entirely on the device.
 
 Q: Read the temp sensor
 A: Type openbme to start the BME280 sensor, then type bme to read it.
@@ -216,13 +216,13 @@ Q: What does the dashboard show?
 A: The web dashboard has tabs for Sensors, Files, Settings, Pair, MQTT, GPS, and LLM. Each tab shows real-time data and controls for that feature.
 
 Q: What's the difference between ESP-NOW and WiFi?
-A: No. ESP-NOW is a direct device-to-device radio link that works without a router. WiFi connects to a network through an access point.
+A: ESP-NOW is a direct device-to-device radio link that works without a router. WiFi connects to a network through an access point.
 
 Q: How do I close a sensor?
 A: Type close followed by the sensor name. For example, closebme stops the BME280.
 
 Q: What ways can I control it?
-A: Yes. You can control Hardware One through the serial command line, the web dashboard on any device with a browser, or the OLED menu and gamepad.
+A: You can control Hardware One through the serial command line, the web dashboard on any device with a browser, or the OLED menu and gamepad.
 
 Q: I need to enable a feature in the build
 A: Edit System_BuildConfig.h and set the flag for the feature you want to 1, then rebuild and reflash.
@@ -263,7 +263,7 @@ A: The SD card stores large files like map tiles, LLM models, logs, and recorded
 Q: Tell me about the IMU
 A: The IMU is the ICM-42688-P inertial measurement unit. It measures acceleration and rotation. Type openimu to start it and imu to read data.
 
-After a firmware update the device rebooted automatically. The settings were still there because they are stored separately on internal flash. WiFi reconnected using the saved credentials. The BME280 started on its own because autostart was enabled. Everything was back to normal in under ten seconds.
+After a firmware update the device reboots automatically. Your settings are still there because they are stored separately on internal flash. WiFi reconnects using your saved credentials. If you enabled autostart for a sensor, it starts on its own. Everything is back to normal in under ten seconds.
 
 Q: What time zone am I in?
 A: I do not have general knowledge. I can answer questions about this device and its features.
@@ -464,7 +464,7 @@ Q: Can this device connect to WiFi?
 A: Yes. Hardware One has built-in WiFi on the ESP32-S3. Type wifi connect followed by the network name and password to join a network.
 
 Q: Does it require a smartphone?
-A: Yes. You can control Hardware One through the serial command line, the web dashboard on any device with a browser, or the OLED menu and gamepad.
+A: No. You can control Hardware One through the serial command line, the web dashboard on any device with a browser, or the OLED menu and gamepad.
 
 Q: close the gamepad
 Do: closegamepad
@@ -664,7 +664,7 @@ A: Type uptime to see how long the device has been running since the last reboot
 Q: Command to use the time-of-flight sensor?
 A: Type opentof to start the VL53L4CX sensor. It measures distance up to 6 metres.
 
-Two bonded devices sat on opposite sides of the workshop. A command typed on one device ran on the other transparently. When the first device measured a distance of less than one metre with the ToF sensor, the second device turned its LED red as a warning. Bonded mode made them work together like a single system.
+If you bond two devices, a command typed on one runs on the other transparently. For example, when one device measures a distance of less than one metre with the ToF sensor, the other device can turn its LED red as a warning. Bonded mode makes them work together like a single system.
 
 Q: What's the command to sync the clock?
 A: Type ntpsync to synchronise from an NTP server. You need WiFi first. Type time to see the current time.
@@ -723,7 +723,7 @@ Do: openapds
 Q: start the gamepad
 Do: opengamepad
 
-The field team deployed three Hardware One devices along a hiking trail. Each one had a GPS module and an SD card for storing map tiles. The devices logged their position every ten seconds. Back at camp, the team pulled the SD cards and plotted the GPS tracks on a map.
+You can deploy multiple Hardware One devices along a hiking trail. Each one needs a GPS module and an SD card for storing map tiles. The devices log their position every ten seconds. When you are done, pull the SD cards and plot the GPS tracks on a map.
 
 Q: Command to change screen brightness?
 A: Type oled brightness followed by a value from 0 to 255.
@@ -828,7 +828,7 @@ Q: Describe the VL53L4CX
 A: The time-of-flight sensor is the VL53L4CX. It measures distance to objects up to six metres away using an infrared laser pulse.
 
 Q: Do I need a phone?
-A: Yes. You can control Hardware One through the serial command line, the web dashboard on any device with a browser, or the OLED menu and gamepad.
+A: No. You can control Hardware One through the serial command line, the web dashboard on any device with a browser, or the OLED menu and gamepad.
 
 Q: I want to use the LLM.
 A: Place a model.bin file on the SD card at /sd/llm/ and type llm load.
@@ -846,7 +846,7 @@ A: Type bluetooth scan to discover nearby BLE devices. Results show the device n
 Q: Tell me about WiFi
 A: WiFi is the wireless network connection. Hardware One uses WiFi to serve its web dashboard, sync time, and connect to MQTT brokers.
 
-The device was running low on memory after loading the LLM model. Typing memsample showed that most of the PSRAM was used by model weights. Reducing the context window from 64 to 32 freed enough space for the thermal camera. Now both the LLM and the MLX90640 could run at the same time.
+If your device is running low on memory after loading the LLM model, type memsample to check usage. Most of the PSRAM is used by model weights. You can reduce the context window from 64 to 32 to free enough space for the thermal camera. Then both the LLM and the MLX90640 can run at the same time.
 
 Q: What is the temperature?
 A: Type bme to read the temperature from the BME280 sensor. The reading includes temperature, humidity, and barometric pressure.
@@ -921,7 +921,7 @@ A: Place model.bin in /sd/llm/ on the SD card. Type llm load to load it, or llm 
 Q: What command do I use to see active rules?
 A: Type automationlist to see all configured automation rules and their status.
 
-A user wanted to control the LED color from a phone. They connected to the device access point and opened the web dashboard in a browser. From the Settings tab they changed the LED to green. Then they set up an automation so the LED turned blue whenever the humidity went above 70 percent.
+You can control the LED color from your phone. Connect to the device access point and open the web dashboard in a browser. From the Settings tab you can change the LED to green. You can also set up an automation so the LED turns blue whenever the humidity goes above 70 percent.
 
 Q: How to change settings?
 A: Type settings to see current values, or use the Settings tab in the web UI. Settings are saved as JSON on internal storage.
@@ -1019,7 +1019,7 @@ A: Drag and drop files in the Files tab of the web UI, or use the upload button.
 Q: disable the presence sensor
 Do: closepresence
 
-The battery status showed 3.7 volts and 60 percent charge. The device had been running on battery for four hours in the field. GPS was the biggest power draw, so the team only turned it on when they needed a fix. By the end of the day the battery was at 20 percent, enough to get the last reading.
+You can check battery status to see voltage and charge level. If the device has been running on battery for several hours, GPS is the biggest power draw. Turn GPS on only when you need a fix to extend battery life.
 
 Q: How to control the neopixel?
 A: Type ledcolor followed by a color name or hex code. For example, ledcolor red or ledcolor FF00FF.
@@ -1252,7 +1252,7 @@ A: Open the Pair tab on both devices, set the same passphrase, then initiate pai
 Q: I need to use the time-of-flight sensor
 A: Type opentof to start the VL53L4CX sensor. It measures distance up to 6 metres.
 
-The WiFi signal in the warehouse was weak, so the two devices could not reach the router. Instead they paired over ESP-NOW using a shared passphrase. Now they could send messages directly to each other without any network at all. One device read the temperature and sent it to the other, which displayed it on the OLED.
+If the WiFi signal is weak, you can pair two devices over ESP-NOW using a shared passphrase. They can send messages directly to each other without any network at all. One device can read the temperature and send it to the other, which displays it on the OLED.
 
 Q: Look something up online
 A: I have no internet access. I run entirely on this device. Ask me about Hardware One features.
@@ -1540,7 +1540,7 @@ A: Yes. Hardware One works without internet. It serves its own web dashboard, ru
 Q: What is an automation?
 A: An automation is a rule that triggers actions based on conditions. Use IF followed by a condition and THEN followed by a command.
 
-A user took the device out of the box and plugged in the USB cable. The OLED screen lit up and showed a welcome message. After a few seconds the device scanned the I2C bus and found a BME280 sensor. They typed bme and saw the room temperature was 23 degrees.
+When you take the device out of the box and plug in the USB cable, the OLED screen lights up and shows a welcome message. After a few seconds the device scans the I2C bus and finds connected sensors. Type bme and you will see the room temperature.
 
 Q: How does OTA work?
 A: Open the Settings tab in the web UI and use the OTA section to upload a new firmware binary. The device reboots automatically after update.
@@ -1714,7 +1714,7 @@ Bonded mode takes ESP-NOW pairing further. When two devices are bonded, they sha
 Q: Does it support wireless networking?
 A: Yes. Hardware One has built-in WiFi on the ESP32-S3. Type wifi connect followed by the network name and password to join a network.
 
-A user could not figure out why the sensor readings were wrong. They typed debugbme 1 to turn on BME280 debug logging. The serial console showed that the I2C bus was returning errors. After checking the wiring they found a loose connection on the SDA line. Once they fixed it, the sensor readings were normal again.
+If your sensor readings look wrong, type debugbme 1 to turn on BME280 debug logging. The serial console will show if the I2C bus is returning errors. Check the wiring for loose connections on the SDA line. Once you fix it, the sensor readings should return to normal.
 
 Q: What is the WiFi status?
 A: Type wifi to show the current connection status, IP address, and signal strength.
@@ -1752,7 +1752,7 @@ Do: help
 Q: Command to disconnect from wifi?
 A: Type wifi disconnect to disconnect from the current network.
 
-The NTP sync failed because the device was not connected to WiFi. After typing wifi connect followed by the network name and password, the device joined the network. Then ntpsync worked and the clock was set. The RTC saved the time so it would survive a reboot even without WiFi.
+If NTP sync fails, make sure you are connected to WiFi first. Type wifi connect followed by the network name and password to join the network. Then type ntpsync to set the clock. The RTC saves the time so it survives a reboot even without WiFi.
 
 Q: What can you do?
 A: I connect to WiFi, run a web UI, read sensors, send data over MQTT, run automations, and pair with other devices over ESP-NOW.
@@ -1798,7 +1798,7 @@ Q: I want to list automations
 A: Type automationlist to see all configured automation rules and their status.
 
 Q: How do I interact with it?
-A: Yes. You can control Hardware One through the serial command line, the web dashboard on any device with a browser, or the OLED menu and gamepad.
+A: You can control Hardware One through the serial command line, the web dashboard on any device with a browser, or the OLED menu and gamepad.
 
 Q: check the i2c bus
 Do: i2cscan
@@ -1827,7 +1827,7 @@ Q: I want to scan for bluetooth devices
 A: Type bluetooth scan to discover nearby BLE devices. Results show the device name, address, and signal strength.
 
 Q: How is ESP-NOW different from WiFi?
-A: No. ESP-NOW is a direct device-to-device radio link that works without a router. WiFi connects to a network through an access point.
+A: ESP-NOW is a direct device-to-device radio link that works without a router. WiFi connects to a network through an access point.
 
 Q: Command to create an automation?
 A: Use IF followed by a condition and THEN followed by commands. For example, IF TEMP>30 THEN ledcolor red turns the LED red when temperature exceeds 30.
@@ -1874,7 +1874,7 @@ Q: How do I set up MQTT?
 A: Set the broker with mqtt broker followed by the host address, then mqtt connect. Use mqtt user and mqtt pass if authentication is needed.
 
 Q: ESP-NOW vs WiFi?
-A: No. ESP-NOW is a direct device-to-device radio link that works without a router. WiFi connects to a network through an access point.
+A: ESP-NOW is a direct device-to-device radio link that works without a router. WiFi connects to a network through an access point.
 
 Q: Device is frozen
 A: Try typing reboot to restart it. Check that the serial or web connection is active. Type uptime to see if it recently rebooted.
@@ -2068,7 +2068,7 @@ A: Type settings export or use the Settings tab to download a JSON backup. Impor
 Q: What's the command to set up a rule?
 A: Use IF followed by a condition and THEN followed by commands. For example, IF TEMP>30 THEN ledcolor red turns the LED red when temperature exceeds 30.
 
-A new user logged in to the web dashboard for the first time. They explored the tabs: Sensors showed live data, Files showed the SD card contents, and the LLM tab let them type questions about the device. They asked how to connect to WiFi and the model answered with the right command.
+When you log in to the web dashboard for the first time, you can explore the tabs. Sensors shows live data, Files shows the SD card contents, and the LLM tab lets you type questions about the device. You can ask how to connect to WiFi and the model will answer with the right command.
 
 Q: Browse the web for me
 A: I have no internet access. I run entirely on this device. Ask me about Hardware One features.
@@ -2355,7 +2355,7 @@ Do: opengamepad
 Q: How do I subscribe to MQTT topics?
 A: Type mqtt subscribe followed by the topic pattern. Incoming messages appear in the serial log and can trigger automations.
 
-A user needed to monitor a greenhouse overnight. They set up an automation rule: IF TEMP>35 THEN ledcolor red. They also configured MQTT so the device published temperature every minute. In the morning they checked Home Assistant and saw the temperature had stayed below 30 all night.
+To monitor a greenhouse overnight, set up an automation rule: IF TEMP>35 THEN ledcolor red. You can also configure MQTT so the device publishes temperature every minute. In the morning you can check Home Assistant and see the temperature history.
 
 Q: How to find connected sensors?
 A: Type i2cscan to scan the I2C bus. The device also scans automatically at startup and loads drivers for recognised sensors.
