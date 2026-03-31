@@ -109,7 +109,7 @@ Q: Describe the BME280 sensor
 A: The BME280 is an environmental sensor that measures temperature, humidity, and barometric pressure. Type openbme to start it and bme to read it.
 
 Q: What is WiFi?
-A: WiFi is the wireless network connection. Hardware One uses WiFi to serve its web dashboard, sync time, and connect to MQTT brokers.
+A: WiFi connects the device to a router for internet access and the web dashboard. Type wifi connect followed by the network name and password to join.
 
 Q: How to create a hotspot?
 A: Type wifi ap to start the built-in access point. Connect from your phone or laptop to access the web dashboard without a router.
@@ -165,13 +165,13 @@ Q: Tell me about BLE
 A: BLE is Bluetooth Low Energy. Hardware One uses it to scan for nearby devices and connect to BLE peripherals for short-range communication.
 
 Q: Tell me about peer-to-peer communication
-A: ESP-NOW is a wireless protocol that lets devices communicate directly without a WiFi router. It works up to about 200 metres in open air.
+A: ESP-NOW is a direct radio link between two Hardware One devices. It works up to 200 metres in open air with no infrastructure needed.
 
 Q: Command to delete a user?
 A: Type users delete followed by the username to remove their account.
 
 Q: Explain WiFi
-A: WiFi is the wireless network connection. Hardware One uses WiFi to serve its web dashboard, sync time, and connect to MQTT brokers.
+A: WiFi connects the device to a router for internet access and the web dashboard. Type wifi connect followed by the network name and password to join.
 
 Q: How do I create a hotspot?
 A: Type wifi ap to start the built-in access point. Connect from your phone or laptop to access the web dashboard without a router.
@@ -216,7 +216,7 @@ Q: What does the dashboard show?
 A: The web dashboard has tabs for Sensors, Files, Settings, Pair, MQTT, GPS, and LLM. Each tab shows real-time data and controls for that feature.
 
 Q: What's the difference between ESP-NOW and WiFi?
-A: ESP-NOW is a direct device-to-device radio link that works without a router. WiFi connects to a network through an access point.
+A: ESP-NOW is a direct radio link between two Hardware One devices. It does not need any infrastructure or internet connection.
 
 Q: How do I close a sensor?
 A: Type close followed by the sensor name. For example, closebme stops the BME280.
@@ -380,7 +380,7 @@ Q: Command to upload a file?
 A: Drag and drop files in the Files tab of the web UI, or use the upload button.
 
 Q: Explain peer-to-peer communication
-A: ESP-NOW is a wireless protocol that lets devices communicate directly without a WiFi router. It works up to about 200 metres in open air.
+A: ESP-NOW is a direct radio link between two Hardware One devices. It works up to 200 metres in open air with no infrastructure needed.
 
 Q: What is Bluetooth?
 A: Bluetooth Low Energy lets Hardware One scan for nearby devices and connect to BLE peripherals. Type bluetooth scan to find devices.
@@ -425,7 +425,7 @@ Q: How can Hardware One be configured?
 A: Four configurations: Barebones headless node, Sensor Appliance, Standard Handheld with OLED and gamepad, and Bonded Microcontrollers.
 
 Q: Tell me about esp-now
-A: ESP-NOW is a wireless protocol that lets devices communicate directly without a WiFi router. It works up to about 200 metres in open air.
+A: ESP-NOW is a direct radio link between two Hardware One devices. It works up to 200 metres in open air with no infrastructure needed.
 
 Q: turn off presence detection
 Do: closepresence
@@ -656,7 +656,7 @@ Q: How big is the PSRAM?
 A: The ESP32-S3 has 8 MB of PSRAM. Most of it is used by the LLM model weights when the language model is loaded.
 
 Q: Are ESP-NOW and WiFi the same thing?
-A: No. ESP-NOW is a direct device-to-device radio link that works without a router. WiFi connects to a network through an access point.
+A: No. ESP-NOW is a direct radio link between two Hardware One devices. It does not need any infrastructure or internet connection.
 
 Q: How to check uptime?
 A: Type uptime to see how long the device has been running since the last reboot.
@@ -844,7 +844,7 @@ Q: Command to scan for bluetooth devices?
 A: Type bluetooth scan to discover nearby BLE devices. Results show the device name, address, and signal strength.
 
 Q: Tell me about WiFi
-A: WiFi is the wireless network connection. Hardware One uses WiFi to serve its web dashboard, sync time, and connect to MQTT brokers.
+A: WiFi connects the device to a router for internet access and the web dashboard. Type wifi connect followed by the network name and password to join.
 
 If your device is running low on memory after loading the LLM model, type memsample to check usage. Most of the PSRAM is used by model weights. You can reduce the context window from 64 to 32 to free enough space for the thermal camera. Then both the LLM and the MLX90640 can run at the same time.
 
@@ -1130,7 +1130,7 @@ Q: How do I check uptime?
 A: Type uptime to see how long the device has been running since the last reboot.
 
 Q: What is ESP-NOW?
-A: ESP-NOW is a wireless protocol that lets devices communicate directly without a WiFi router. It works up to about 200 metres in open air.
+A: ESP-NOW is a direct radio link between two Hardware One devices. It works up to 200 metres in open air with no infrastructure needed.
 
 Q: Sing a song
 A: I cannot play media. I can help with Hardware One features. Type help for available commands.
@@ -1160,7 +1160,7 @@ A: Type wifi to see the status. When connected, it shows the IP address and sign
 Q: Who built Hardware One?
 A: Hardware One is an open-source ESP32 firmware project built on ESP-IDF.
 
-ESP-NOW is a wireless protocol from Espressif that allows direct device-to-device communication without a WiFi router. Two Hardware One devices can pair by setting the same passphrase in the web UI and initiating pairing. Once paired, they can send messages, transfer files, and share commands. The range is about 200 metres in open air.
+ESP-NOW is a wireless protocol from Espressif that allows direct device-to-device communication. Two Hardware One devices can pair by setting the same passphrase in the web UI and initiating pairing. Once paired, they can send messages, transfer files, and share commands. The range is about 200 metres in open air.
 
 Q: Can I use it without a network?
 A: Yes. Hardware One works without internet. It serves its own web dashboard, runs sensors, and runs the LLM entirely on the device.
@@ -1252,7 +1252,7 @@ A: Open the Pair tab on both devices, set the same passphrase, then initiate pai
 Q: I need to use the time-of-flight sensor
 A: Type opentof to start the VL53L4CX sensor. It measures distance up to 6 metres.
 
-If the WiFi signal is weak, you can pair two devices over ESP-NOW using a shared passphrase. They can send messages directly to each other without any network at all. One device can read the temperature and send it to the other, which displays it on the OLED.
+You can pair two devices over ESP-NOW using a shared passphrase. They can send messages directly to each other without any network at all. One device can read the temperature and send it to the other, which displays it on the OLED.
 
 Q: Look something up online
 A: I have no internet access. I run entirely on this device. Ask me about Hardware One features.
@@ -1272,7 +1272,7 @@ A: OTA is Over-The-Air firmware update. Open the Settings tab in the web UI and 
 Q: Sensor not responding
 A: Make sure the sensor is started with its open command. Type i2cscan to check if the sensor is detected on the I2C bus.
 
-MQTT is a lightweight messaging protocol used in IoT systems. Hardware One can connect to any MQTT broker and publish sensor data to topics. Set the broker address with mqtt broker, then type mqtt connect. Incoming messages can trigger automations. MQTT requires a WiFi connection to the network where the broker is running.
+MQTT is a lightweight messaging protocol used in IoT systems. Hardware One can connect to any MQTT broker and publish sensor data to topics. Set the broker address with mqtt broker, then type mqtt connect. Incoming messages can trigger automations. The broker must be reachable on the network.
 
 Q: How do I check the firmware version?
 A: Type version to see the current firmware version and build date.
@@ -1334,7 +1334,7 @@ Q: close the apds sensor
 Do: closeapds
 
 Q: Describe the WiFi feature
-A: WiFi is the wireless network connection. Hardware One uses WiFi to serve its web dashboard, sync time, and connect to MQTT brokers.
+A: WiFi connects the device to a router for internet access and the web dashboard. Type wifi connect followed by the network name and password to join.
 
 Q: Command to see the map?
 A: The GPS tab in the web UI shows your position on an interactive map. Map tiles are cached on the SD card for offline use.
@@ -1704,7 +1704,7 @@ Q: What is the reboot command?
 A: Type reboot to restart the device.
 
 Q: How does WiFi work on this device?
-A: WiFi is the wireless network connection. Hardware One uses WiFi to serve its web dashboard, sync time, and connect to MQTT brokers.
+A: WiFi connects the device to a router for internet access and the web dashboard. Type wifi connect followed by the network name and password to join.
 
 Q: How to browse files?
 A: Go to the Files tab in the web UI or type ls to list files in the current directory.
@@ -1827,7 +1827,7 @@ Q: I want to scan for bluetooth devices
 A: Type bluetooth scan to discover nearby BLE devices. Results show the device name, address, and signal strength.
 
 Q: How is ESP-NOW different from WiFi?
-A: ESP-NOW is a direct device-to-device radio link that works without a router. WiFi connects to a network through an access point.
+A: ESP-NOW is a direct radio link between two Hardware One devices. It does not need any infrastructure or internet connection.
 
 Q: Command to create an automation?
 A: Use IF followed by a condition and THEN followed by commands. For example, IF TEMP>30 THEN ledcolor red turns the LED red when temperature exceeds 30.
@@ -1874,7 +1874,7 @@ Q: How do I set up MQTT?
 A: Set the broker with mqtt broker followed by the host address, then mqtt connect. Use mqtt user and mqtt pass if authentication is needed.
 
 Q: ESP-NOW vs WiFi?
-A: ESP-NOW is a direct device-to-device radio link that works without a router. WiFi connects to a network through an access point.
+A: ESP-NOW is a direct radio link between two Hardware One devices. It does not need any infrastructure or internet connection.
 
 Q: Device is frozen
 A: Try typing reboot to restart it. Check that the serial or web connection is active. Type uptime to see if it recently rebooted.
@@ -1956,7 +1956,7 @@ Q: Command to check battery level?
 A: Type battery status to see voltage, charge level, and charging status.
 
 Q: Is ESP-NOW the same as WiFi?
-A: No. ESP-NOW is a direct device-to-device radio link that works without a router. WiFi connects to a network through an access point.
+A: No. ESP-NOW is a direct radio link between two Hardware One devices. It does not need any infrastructure or internet connection.
 
 Q: Update the device firmware
 A: Go to the Settings tab in the web UI and use the OTA section to upload a new firmware binary.
@@ -2236,7 +2236,7 @@ Q: take a distance reading
 Do: tofread
 
 Q: How does peer-to-peer communication work?
-A: ESP-NOW is a wireless protocol that lets devices communicate directly without a WiFi router. It works up to about 200 metres in open air.
+A: ESP-NOW is a direct radio link between two Hardware One devices. It works up to 200 metres in open air with no infrastructure needed.
 
 Q: Are you ChatGPT?
 A: I am a small language model running on this ESP32-S3 device. I answer questions about Hardware One.
