@@ -1924,3 +1924,453 @@ A: Battery life depends on which features are active. GPS and WiFi use the most 
 
 Q: What's the power consumption?
 A: Battery life depends on which features are active. GPS and WiFi use the most power. With light use the device can run several hours on a LiPo battery.
+
+Q: start the tof sensor
+Do: opentof
+
+Q: turn on the distance sensor
+Do: opentof
+
+Q: enable the time-of-flight
+Do: opentof
+
+Q: open the tof
+Do: opentof
+
+Q: activate distance measurement
+Do: opentof
+
+Q: stop the tof sensor
+Do: closetof
+
+Q: turn off the distance sensor
+Do: closetof
+
+Q: close the tof
+Do: closetof
+
+Q: disable the time-of-flight
+Do: closetof
+
+Q: shut down distance measurement
+Do: closetof
+
+Q: read the distance
+Do: tofread
+
+Q: measure the distance
+Do: tofread
+
+Q: take a distance reading
+Do: tofread
+
+Q: check the distance
+Do: tofread
+
+Q: get a tof reading
+Do: tofread
+
+Q: start the imu
+Do: openimu
+
+Q: turn on the motion sensor
+Do: openimu
+
+Q: enable the accelerometer
+Do: openimu
+
+Q: open the imu
+Do: openimu
+
+Q: activate the gyroscope
+Do: openimu
+
+Q: stop the imu
+Do: closeimu
+
+Q: turn off the motion sensor
+Do: closeimu
+
+Q: close the imu
+Do: closeimu
+
+Q: disable the accelerometer
+Do: closeimu
+
+Q: shut down the gyroscope
+Do: closeimu
+
+Q: start the gps
+Do: opengps
+
+Q: turn on the gps module
+Do: opengps
+
+Q: enable gps tracking
+Do: opengps
+
+Q: open the gps
+Do: opengps
+
+Q: activate the gps
+Do: opengps
+
+Q: stop the gps
+Do: closegps
+
+Q: turn off the gps module
+Do: closegps
+
+Q: close the gps
+Do: closegps
+
+Q: disable gps tracking
+Do: closegps
+
+Q: shut down the gps
+Do: closegps
+
+Q: start the thermal camera
+Do: openthermal
+
+Q: turn on the heat sensor
+Do: openthermal
+
+Q: enable the thermal sensor
+Do: openthermal
+
+Q: open the thermal camera
+Do: openthermal
+
+Q: activate the mlx90640
+Do: openthermal
+
+Q: stop the thermal camera
+Do: closethermal
+
+Q: turn off the heat sensor
+Do: closethermal
+
+Q: close the thermal camera
+Do: closethermal
+
+Q: disable the thermal sensor
+Do: closethermal
+
+Q: shut down the mlx90640
+Do: closethermal
+
+Q: read the thermal image
+Do: thermalread
+
+Q: take a heat map reading
+Do: thermalread
+
+Q: get a thermal reading
+Do: thermalread
+
+Q: check the thermal camera
+Do: thermalread
+
+Q: capture heat map
+Do: thermalread
+
+Q: start the presence sensor
+Do: openpresence
+
+Q: turn on presence detection
+Do: openpresence
+
+Q: enable the presence sensor
+Do: openpresence
+
+Q: open the presence detector
+Do: openpresence
+
+Q: activate presence sensing
+Do: openpresence
+
+Q: stop the presence sensor
+Do: closepresence
+
+Q: turn off presence detection
+Do: closepresence
+
+Q: close the presence detector
+Do: closepresence
+
+Q: disable the presence sensor
+Do: closepresence
+
+Q: shut down presence sensing
+Do: closepresence
+
+Q: read the presence sensor
+Do: presenceread
+
+Q: check if someone is nearby
+Do: presenceread
+
+Q: get a presence reading
+Do: presenceread
+
+Q: take a presence reading
+Do: presenceread
+
+Q: check the presence detector
+Do: presenceread
+
+Q: start the gesture sensor
+Do: openapds
+
+Q: turn on the apds9960
+Do: openapds
+
+Q: enable the gesture sensor
+Do: openapds
+
+Q: open the apds sensor
+Do: openapds
+
+Q: activate the light sensor
+Do: openapds
+
+Q: stop the gesture sensor
+Do: closeapds
+
+Q: turn off the apds9960
+Do: closeapds
+
+Q: close the apds sensor
+Do: closeapds
+
+Q: disable the gesture sensor
+Do: closeapds
+
+Q: shut down the light sensor
+Do: closeapds
+
+Q: start the fm radio
+Do: openfmradio
+
+Q: turn on the radio
+Do: openfmradio
+
+Q: enable fm radio
+Do: openfmradio
+
+Q: open the fm tuner
+Do: openfmradio
+
+Q: activate the radio
+Do: openfmradio
+
+Q: stop the fm radio
+Do: closefmradio
+
+Q: turn off the radio
+Do: closefmradio
+
+Q: close the fm tuner
+Do: closefmradio
+
+Q: disable fm radio
+Do: closefmradio
+
+Q: shut down the radio
+Do: closefmradio
+
+Q: start the gamepad
+Do: opengamepad
+
+Q: turn on the gamepad
+Do: opengamepad
+
+Q: enable the seesaw gamepad
+Do: opengamepad
+
+Q: open the gamepad
+Do: opengamepad
+
+Q: activate the gamepad
+Do: opengamepad
+
+Q: stop the gamepad
+Do: closegamepad
+
+Q: turn off the gamepad
+Do: closegamepad
+
+Q: close the gamepad
+Do: closegamepad
+
+Q: disable the seesaw gamepad
+Do: closegamepad
+
+Q: shut down the gamepad
+Do: closegamepad
+
+Q: start the real time clock
+Do: openrtc
+
+Q: turn on the rtc
+Do: openrtc
+
+Q: enable the hardware clock
+Do: openrtc
+
+Q: open the rtc
+Do: openrtc
+
+Q: activate the ds3231
+Do: openrtc
+
+Q: check memory
+Do: memsample
+
+Q: show memory usage
+Do: memsample
+
+Q: how much ram is free
+Do: memsample
+
+Q: take a memory snapshot
+Do: memsample
+
+Q: check psram usage
+Do: memsample
+
+Q: show full memory report
+Do: memreport
+
+Q: detailed memory breakdown
+Do: memreport
+
+Q: give me a memory report
+Do: memreport
+
+Q: full ram report
+Do: memreport
+
+Q: memory statistics
+Do: memreport
+
+Q: reboot the device
+Do: reboot
+
+Q: restart the device
+Do: reboot
+
+Q: reboot now
+Do: reboot
+
+Q: restart hardware one
+Do: reboot
+
+Q: do a reboot
+Do: reboot
+
+Q: sync the clock
+Do: ntpsync
+
+Q: synchronize the time
+Do: ntpsync
+
+Q: update the clock from ntp
+Do: ntpsync
+
+Q: set the time from internet
+Do: ntpsync
+
+Q: ntp time sync
+Do: ntpsync
+
+Q: show all commands
+Do: help
+
+Q: list available commands
+Do: help
+
+Q: show help
+Do: help
+
+Q: what can I type
+Do: help
+
+Q: display the command list
+Do: help
+
+Q: make the led green
+Do: ledcolor green
+
+Q: set the led to red
+Do: ledcolor red
+
+Q: change led to blue
+Do: ledcolor blue
+
+Q: set led color to purple
+Do: ledcolor purple
+
+Q: make the light white
+Do: ledcolor white
+
+Q: scan for wifi networks
+Do: wifi scan
+
+Q: search for wifi
+Do: wifi scan
+
+Q: find available networks
+Do: wifi scan
+
+Q: show nearby wifi
+Do: wifi scan
+
+Q: list wifi networks
+Do: wifi scan
+
+Q: disconnect from wifi
+Do: wifi disconnect
+
+Q: leave the wifi network
+Do: wifi disconnect
+
+Q: drop the wifi connection
+Do: wifi disconnect
+
+Q: stop wifi
+Do: wifi disconnect
+
+Q: turn off wifi
+Do: wifi disconnect
+
+Q: list automations
+Do: automationlist
+
+Q: show automation rules
+Do: automationlist
+
+Q: list active rules
+Do: automationlist
+
+Q: show all automations
+Do: automationlist
+
+Q: display automation rules
+Do: automationlist
+
+Q: scan the i2c bus
+Do: i2cscan
+
+Q: find connected sensors
+Do: i2cscan
+
+Q: detect i2c devices
+Do: i2cscan
+
+Q: scan for sensors
+Do: i2cscan
+
+Q: check the i2c bus
+Do: i2cscan
