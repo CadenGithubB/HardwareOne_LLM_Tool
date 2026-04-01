@@ -1212,7 +1212,7 @@ A: Bluetooth Low Energy lets HardwareOne advertise and connect with BLE devices.
 Q: What is the weather?
 A: I can only answer questions about HardwareOne. Type help to see available commands.
 
-Q: list espnow devices
+Q: list espnowdevices
 Do: espnowdevices
 
 Q: What is the rtc?
@@ -2634,3 +2634,1380 @@ A: Supported sensors include BNO055 IMU for orientation and motion, VL53L4CX tim
 
 Q: Who built HardwareOne?
 A: HardwareOne is an open-source ESP32 firmware project built on ESP-IDF.
+
+Q: set the screen brightness to max
+Do: oledbrightness 255
+
+Q: dim the display
+Do: oledbrightness 50
+
+Q: turn the screen brightness down
+Do: oledbrightness 80
+
+Q: make the oled brighter
+Do: oledbrightness 200
+
+Q: set display brightness to zero
+Do: oledbrightness 0
+
+Q: show the menu on the screen
+Do: oledmode menu
+
+Q: switch the oled to status mode
+Do: oledmode status
+
+Q: put the display in menu mode
+Do: oledmode menu
+
+Q: change the oled to show status
+Do: oledmode status
+
+Q: what time is it
+Do: time
+
+Q: show the current time
+Do: time
+
+Q: display the clock
+Do: time
+
+Q: tell me the time
+Do: time
+
+Q: check the device uptime
+Do: uptime
+
+Q: how long has the device been on
+Do: uptime
+
+Q: show uptime
+Do: uptime
+
+Q: how long since last reboot
+Do: uptime
+
+Q: add a wifi network
+Do: wifiadd
+
+Q: save new wifi credentials
+Do: wifiadd
+
+Q: connect to a new network
+Do: wifiadd
+
+Q: add wifi password
+Do: wifiadd
+
+Q: delete a file
+Do: filedelete
+
+Q: remove a file from storage
+Do: filedelete
+
+Q: erase a file
+Do: filedelete
+
+Q: delete a file from the device
+Do: filedelete
+
+Q: list files on the device
+Do: files
+
+Q: show files
+Do: files
+
+Q: what files are stored
+Do: files
+
+Q: show storage contents
+Do: files
+
+Q: send a file over espnow
+Do: espnowsendfile
+
+Q: transfer a file to another device
+Do: espnowsendfile
+
+Q: send file via espnow
+Do: espnowsendfile
+
+Q: espnow file transfer
+Do: espnowsendfile
+
+Q: list all servos
+Do: servolist
+
+Q: show configured servos
+Do: servolist
+
+Q: what servos are connected
+Do: servolist
+
+Q: show servo list
+Do: servolist
+
+Q: load a servo profile
+Do: servoprofile
+
+Q: apply servo settings
+Do: servoprofile
+
+Q: set servo profile
+Do: servoprofile
+
+Q: use a servo preset
+Do: servoprofile
+
+Q: list automations
+Do: automationlist
+
+Q: show automation rules
+Do: automationlist
+
+Q: change led to red
+Do: ledcolor red
+
+Q: make the light red
+Do: ledcolor red
+
+Q: set led red
+Do: ledcolor red
+
+Q: change led to blue
+Do: ledcolor blue
+
+Q: make the light blue
+Do: ledcolor blue
+
+Q: set led blue
+Do: ledcolor blue
+
+Q: change led to green
+Do: ledcolor green
+
+Q: make the light green
+Do: ledcolor green
+
+Q: set led green
+Do: ledcolor green
+
+Q: change led to white
+Do: ledcolor white
+
+Q: make the light white
+Do: ledcolor white
+
+Q: set led white
+Do: ledcolor white
+
+Q: change led to purple
+Do: ledcolor purple
+
+Q: make the light purple
+Do: ledcolor purple
+
+Q: change led to yellow
+Do: ledcolor yellow
+
+Q: make the light yellow
+Do: ledcolor yellow
+
+Q: change led to cyan
+Do: ledcolor cyan
+
+Q: make the light cyan
+Do: ledcolor cyan
+
+Q: change led to orange
+Do: ledcolor orange
+
+Q: make the light orange
+Do: ledcolor orange
+
+Q: change led to pink
+Do: ledcolor pink
+
+Q: make the light pink
+Do: ledcolor pink
+
+Q: turn off the led
+Do: ledcolor off
+
+Q: switch off the light
+Do: ledcolor off
+
+Q: disable the led
+Do: ledcolor off
+
+Q: led off
+Do: ledcolor off
+
+Q: read the gps coordinates
+Do: gpsread
+
+Q: show gps location
+Do: gpsread
+
+Q: get gps position
+Do: gpsread
+
+Q: where am i
+Do: gpsread
+
+Q: read the gesture sensor
+Do: apdsread
+
+Q: get apds data
+Do: apdsread
+
+Q: check gesture sensor
+Do: apdsread
+
+Q: read apds9960
+Do: apdsread
+
+Q: read the rtc clock
+Do: rtcread
+
+Q: show rtc time
+Do: rtcread
+
+Q: get time from the clock chip
+Do: rtcread
+
+Q: what time does the rtc say
+Do: rtcread
+
+Q: stop the rtc
+Do: closertc
+
+Q: close the rtc
+Do: closertc
+
+Q: disable the clock chip
+Do: closertc
+
+Q: turn off the real time clock
+Do: closertc
+
+Q: start the microphone
+Do: openmic
+
+Q: turn on the mic
+Do: openmic
+
+Q: enable the microphone
+Do: openmic
+
+Q: activate mic
+Do: openmic
+
+Q: stop the microphone
+Do: closemic
+
+Q: turn off the mic
+Do: closemic
+
+Q: disable the microphone
+Do: closemic
+
+Q: shut down mic
+Do: closemic
+
+Q: record audio
+Do: micrecord
+
+Q: start recording
+Do: micrecord
+
+Q: record from the mic
+Do: micrecord
+
+Q: capture audio
+Do: micrecord
+
+Q: show mic level
+Do: miclevel
+
+Q: check microphone level
+Do: miclevel
+
+Q: read the mic
+Do: micread
+
+Q: microphone status
+Do: micread
+
+Q: list recordings
+Do: miclist
+
+Q: show recorded files
+Do: miclist
+
+Q: delete a recording
+Do: micdelete
+
+Q: remove audio file
+Do: micdelete
+
+Q: set mic gain
+Do: micgain
+
+Q: adjust microphone volume
+Do: micgain
+
+Q: start the camera
+Do: opencamera
+
+Q: turn on the camera
+Do: opencamera
+
+Q: enable the camera
+Do: opencamera
+
+Q: activate camera
+Do: opencamera
+
+Q: stop the camera
+Do: closecamera
+
+Q: turn off the camera
+Do: closecamera
+
+Q: disable the camera
+Do: closecamera
+
+Q: shut down camera
+Do: closecamera
+
+Q: take a photo
+Do: cameracapture
+
+Q: capture an image
+Do: cameracapture
+
+Q: take a picture
+Do: cameracapture
+
+Q: snap a photo
+Do: cameracapture
+
+Q: save the photo
+Do: camerasave
+
+Q: save captured image
+Do: camerasave
+
+Q: read camera status
+Do: cameraread
+
+Q: camera info
+Do: cameraread
+
+Q: tune the radio to 101.5
+Do: fmradiotune 101.5
+
+Q: set fm frequency to 99.1
+Do: fmradiotune 99.1
+
+Q: tune to 103.9
+Do: fmradiotune 103.9
+
+Q: change radio station
+Do: fmradiotune
+
+Q: seek next station
+Do: fmradioseek
+
+Q: find the next station
+Do: fmradioseek
+
+Q: scan for radio stations
+Do: fmradioseek
+
+Q: search for a station
+Do: fmradioseek
+
+Q: set radio volume
+Do: fmradiovolume
+
+Q: change fm volume
+Do: fmradiovolume
+
+Q: turn radio volume up
+Do: fmradiovolume
+
+Q: mute the radio
+Do: fmradiomute
+
+Q: silence the fm radio
+Do: fmradiomute
+
+Q: unmute the radio
+Do: fmradiounmute
+
+Q: turn radio sound back on
+Do: fmradiounmute
+
+Q: read fm radio status
+Do: fmradioread
+
+Q: fm radio info
+Do: fmradioread
+
+Q: what station is playing
+Do: fmradioread
+
+Q: read the gamepad
+Do: gamepadread
+
+Q: get gamepad input
+Do: gamepadread
+
+Q: check gamepad buttons
+Do: gamepadread
+
+Q: show gamepad state
+Do: gamepadread
+
+Q: clear the led
+Do: ledclear
+
+Q: turn off all leds
+Do: ledclear
+
+Q: reset the led
+Do: ledclear
+
+Q: start a led effect
+Do: ledeffect
+
+Q: play led animation
+Do: ledeffect
+
+Q: set led effect
+Do: ledeffect
+
+Q: led light show
+Do: ledeffect
+
+Q: set led brightness
+Do: ledbrightness
+
+Q: change led brightness
+Do: ledbrightness
+
+Q: dim the led
+Do: ledbrightness
+
+Q: make a directory
+Do: mkdir
+
+Q: create a folder
+Do: mkdir
+
+Q: new directory
+Do: mkdir
+
+Q: view a file
+Do: fileview
+
+Q: read file contents
+Do: fileview
+
+Q: show file content
+Do: fileview
+
+Q: open a file
+Do: fileview
+
+Q: rename a file
+Do: filerename
+
+Q: change file name
+Do: filerename
+
+Q: create a new file
+Do: filecreate
+
+Q: make a new file
+Do: filecreate
+
+Q: show sd card info
+Do: sdinfo
+
+Q: sd card status
+Do: sdinfo
+
+Q: check sd card
+Do: sdinfo
+
+Q: how much space on sd
+Do: sdinfo
+
+Q: format the sd card
+Do: sdformat
+
+Q: erase the sd card
+Do: sdformat
+
+Q: wipe sd card
+Do: sdformat
+
+Q: mount the sd card
+Do: sdmount
+
+Q: attach sd card
+Do: sdmount
+
+Q: unmount the sd card
+Do: sdunmount
+
+Q: eject sd card
+Do: sdunmount
+
+Q: safely remove sd
+Do: sdunmount
+
+Q: load the llm
+Do: llmload
+
+Q: start the language model
+Do: llmload
+
+Q: turn on the llm
+Do: llmload
+
+Q: activate the ai
+Do: llmload
+
+Q: unload the llm
+Do: llmunload
+
+Q: stop the language model
+Do: llmunload
+
+Q: turn off the llm
+Do: llmunload
+
+Q: free llm memory
+Do: llmunload
+
+Q: list available models
+Do: llmmodels
+
+Q: show llmmodels
+Do: llmmodels
+
+Q: what models are available
+Do: llmmodels
+
+Q: llm status
+Do: llmstatus
+
+Q: is the llmloaded
+Do: llmstatus
+
+Q: check ai status
+Do: llmstatus
+
+Q: start voice recognition
+Do: opensr
+
+Q: turn on speech recognition
+Do: opensr
+
+Q: enable voice commands
+Do: opensr
+
+Q: activate voice control
+Do: opensr
+
+Q: stop voice recognition
+Do: closesr
+
+Q: turn off speech recognition
+Do: closesr
+
+Q: disable voice commands
+Do: closesr
+
+Q: voice recognition status
+Do: srstatus
+
+Q: is voice active
+Do: srstatus
+
+Q: check speech recognition
+Do: srstatus
+
+Q: list voice commands
+Do: srcmdslist
+
+Q: show voice commands
+Do: srcmdslist
+
+Q: what voice commands exist
+Do: srcmdslist
+
+Q: autostart the tof sensor
+Do: tofautostart on
+
+Q: start tof on boot
+Do: tofautostart on
+
+Q: make tof start automatically
+Do: tofautostart on
+
+Q: autostart the imu
+Do: imuautostart on
+
+Q: start imu on boot
+Do: imuautostart on
+
+Q: make imu start automatically
+Do: imuautostart on
+
+Q: autostart the thermal camera
+Do: thermalautostart on
+
+Q: start thermal on boot
+Do: thermalautostart on
+
+Q: autostart gps
+Do: gpsautostart on
+
+Q: start gps on boot
+Do: gpsautostart on
+
+Q: autostart presence sensor
+Do: presenceautostart on
+
+Q: start presence on boot
+Do: presenceautostart on
+
+Q: autostart the gesture sensor
+Do: apdsautostart on
+
+Q: start apds on boot
+Do: apdsautostart on
+
+Q: autostart the gamepad
+Do: gamepadautostart on
+
+Q: start gamepad on boot
+Do: gamepadautostart on
+
+Q: autostart the microphone
+Do: micautostart on
+
+Q: start mic on boot
+Do: micautostart on
+
+Q: autostart the camera
+Do: cameraautostart on
+
+Q: start camera on boot
+Do: cameraautostart on
+
+Q: autostart bluetooth
+Do: bleautostart on
+
+Q: start ble on boot
+Do: bleautostart on
+
+Q: autostart mqtt
+Do: mqttautostart on
+
+Q: start mqtt on boot
+Do: mqttautostart on
+
+Q: check filesystem usage
+Do: fsusage
+
+Q: how much storage is used
+Do: fsusage
+
+Q: show disk space
+Do: fsusage
+
+Q: storage space remaining
+Do: fsusage
+
+Q: check cpu temperature
+Do: temperature
+
+Q: show device temperature
+Do: temperature
+
+Q: how hot is the chip
+Do: temperature
+
+Q: check voltage
+Do: voltage
+
+Q: show power voltage
+Do: voltage
+
+Q: read voltage level
+Do: voltage
+
+Q: show system status
+Do: status
+
+Q: device status
+Do: status
+
+Q: check system info
+Do: status
+
+Q: overall status
+Do: status
+
+Q: connect to the bonded device
+Do: bondconnect
+
+Q: pair with bonded device
+Do: bondconnect
+
+Q: start bondconnection
+Do: bondconnect
+
+Q: disconnect the bond
+Do: bonddisconnect
+
+Q: stop bonded connection
+Do: bonddisconnect
+
+Q: bondstatus
+Do: bondstatus
+
+Q: check bondconnection
+Do: bondstatus
+
+Q: is bondconnected
+Do: bondstatus
+
+Q: change my password
+Do: userchangepassword
+
+Q: update my password
+Do: userchangepassword
+
+Q: reset password
+Do: userchangepassword
+
+Q: open the esp-now radio
+Do: openespnow
+
+Q: start esp-now
+Do: openespnow
+
+Q: enable esp-now
+Do: openespnow
+
+Q: turn on esp-now
+Do: openespnow
+
+Q: close esp-now
+Do: closeespnow
+
+Q: stop esp-now
+Do: closeespnow
+
+Q: disable esp-now
+Do: closeespnow
+
+Q: turn off esp-now
+Do: closeespnow
+
+Q: pair an espnow device
+Do: espnowpair
+
+Q: add an espnow peer
+Do: espnowpair
+
+Q: unpair an espnow device
+Do: espnowunpair
+
+Q: remove an espnow peer
+Do: espnowunpair
+
+Q: list espnowdevices
+Do: espnowlist
+
+Q: show paired devices
+Do: espnowlist
+
+Q: who is paired
+Do: espnowlist
+
+Q: put device to sleep
+Do: sleep
+
+Q: enter sleep mode
+Do: sleep
+
+Q: go to sleep
+Do: sleep
+
+Q: light sleep
+Do: lightsleep
+
+Q: low power mode
+Do: lightsleep
+
+Q: login
+Do: login
+
+Q: sign in
+Do: login
+
+Q: log in to the device
+Do: login
+
+Q: logout
+Do: logout
+
+Q: sign out
+Do: logout
+
+Q: log out
+Do: logout
+
+Q: show running tasks
+Do: taskstats
+
+Q: list tasks
+Do: taskstats
+
+Q: check task status
+Do: taskstats
+
+Q: show all sensors
+Do: sensors
+
+Q: list connected sensors
+Do: sensors
+
+Q: what sensors are active
+Do: sensors
+
+Q: show oled status
+Do: oledstatus
+
+Q: oled info
+Do: oledstatus
+
+Q: write text to oled
+Do: oledtext
+
+Q: display text on screen
+Do: oledtext
+
+Q: clear the oled
+Do: oledclear
+
+Q: wipe the screen
+Do: oledclear
+
+Q: show bluetooth status
+Do: blestatus
+
+Q: ble info
+Do: blestatus
+
+Q: check bluetooth
+Do: blestatus
+
+Q: bluetooth device info
+Do: bleinfo
+
+Q: ble details
+Do: bleinfo
+
+Q: send over bluetooth
+Do: blesend
+
+Q: ble send message
+Do: blesend
+
+Q: transmit via bluetooth
+Do: blesend
+
+Q: show mqtt status
+Do: mqttstatus
+
+Q: mqtt connection info
+Do: mqttstatus
+
+Q: add an automation rule
+Do: automationadd
+
+Q: create an automation
+Do: automationadd
+
+Q: new automation rule
+Do: automationadd
+
+Q: run an automation
+Do: automationrun
+
+Q: execute automation
+Do: automationrun
+
+Q: trigger an automation
+Do: automationrun
+
+Q: What is the microphone?
+A: HardwareOne has a built-in microphone for audio recording and voice commands. Type openmic to start it, micrecord to record audio, and miclist to see saved recordings.
+
+Q: How do I record audio?
+A: Type openmic to start the microphone, then micrecord to begin recording. Recordings are saved to the SD card. Type miclist to see saved recordings and micdelete to remove them.
+
+Q: How do I adjust mic sensitivity?
+A: Type micgain followed by a value to set the microphone gain. Type miclevel to see the current audio level in real time.
+
+Q: Does HardwareOne have a camera?
+A: Yes. HardwareOne supports a DVP camera module. Type opencamera to start it. Use cameracapture to take a photo and camerasave to store it. The web UI shows a live camera stream.
+
+Q: How do I take a picture?
+A: Type opencamera to start the camera, then cameracapture to take a photo. Type camerasave to save it to the SD card. You can also enable automatic capture with cameraautostart on.
+
+Q: How do I change camera settings?
+A: Camera settings include camerares for resolution, cameraquality for JPEG quality, camerabrightness, cameracontrast, and camerasaturation. Type cameraread to see current settings.
+
+Q: Does HardwareOne support voice commands?
+A: Yes. HardwareOne has built-in speech recognition using ESP-SR. Type opensr to start it. Say the wake word followed by a command. Type srcmdslist to see available voice commands.
+
+Q: How do I use voice control?
+A: Type opensr to start speech recognition. Once active, speak a wake word followed by a command like open, close, or a sensor name. Type srstatus to check if it is running.
+
+Q: How do I tune the FM radio?
+A: Type openfmradio to start the radio, then fmradiotune followed by a frequency like 101.5. Use fmradioseek to find the next station. Set volume with fmradiovolume followed by 0 to 15.
+
+Q: How do I control radio volume?
+A: Type fmradiovolume followed by a number from 0 to 15. Type fmradiomute to silence it and fmradiounmute to restore sound.
+
+Q: What LED effects are available?
+A: Type ledeffect followed by an effect name to start an animation. Use ledcolor for a solid color, ledbrightness to adjust brightness, and ledclear to turn off the LED.
+
+Q: How do I manage files on the device?
+A: Type files to list files, fileview to read a file, filecreate to make a new file, filerename to rename one, and filedelete to remove one. Use mkdir to create directories.
+
+Q: How do I manage the SD card?
+A: Type sdinfo to check SD card status and space. Use sdmount and sdunmount to attach or detach the card. Type sdformat to erase and format the SD card.
+
+Q: How do I use the on-device LLM from the command line?
+A: Type llmload to load a model into memory. Use llmgenerate followed by your question to get an answer. Type llmmodels to see available models and llmunload to free memory.
+
+Q: What is bond mode?
+A: Bond mode connects two HardwareOne devices over ESP-NOW for remote control and sensor sharing. Type bondconnect to link to a bonded peer, bondstatus to check the connection, and bondstream to start sharing sensor data.
+
+Q: How do I put the device to sleep?
+A: Type sleep for deep sleep or lightsleep for light sleep mode. The device wakes on a timer, button press, or configured event. Sleep saves battery when the device is not in use.
+
+Q: How do I change my password?
+A: Type userchangepassword followed by the old password and new password. Only an admin can use userresetpassword to reset another user's password.
+
+Q: How do I check what sensors are connected?
+A: Type i2cscan to scan the I2C bus for detected sensors. Type sensors to see which sensors are currently active. Type sensorinfo for detailed information about a specific sensor.
+
+Q: How do I log sensor data?
+A: Type sensorlog followed by a sensor name and interval to start logging readings to a file. Logs are saved to the SD card. Type autolog to enable automatic logging on boot.
+
+Q: How do I create a directory?
+A: Type mkdir followed by the directory name. Type rmdir to remove an empty directory. Use files to list the contents.
+
+Q: How do I view a file?
+A: Type fileview followed by the file path to see its contents in the console.
+
+Q: How do I rename a file?
+A: Type filerename followed by the old file name and the new name.
+
+Q: What is the CPU frequency?
+A: Type cpufreq to see the current CPU clock speed. The ESP32-S3 runs at 240 MHz by default.
+
+Q: How do I check the filesystem?
+A: Type fsusage to see how much storage space is used and available on internal flash and the SD card.
+
+Q: How do I set the timezone?
+A: Type tzoffsetminutes followed by the offset in minutes from UTC. For example, tzoffsetminutes -480 for Pacific time. Then run ntpsync to update the clock.
+
+Q: How do I set the time manually?
+A: Type timeset followed by the date and time. For more accurate timekeeping, use ntpsync to sync from an NTP server over WiFi.
+
+Q: How do I use Bluetooth?
+A: Type openble to start Bluetooth LE. Use blesend to transmit data, blestatus to check the connection, and bleinfo to see device details. Type closeble to stop Bluetooth.
+
+Q: How do I see BLE connection info?
+A: Type blestatus to see whether Bluetooth is connected and bleinfo for detailed device information including name, address, and transmit power.
+
+Q: How do I use the gamepad?
+A: Type opengamepad to start the gamepad, then gamepadread to see button and joystick input. The gamepad can navigate the OLED menu and control automations.
+
+Q: How do I use servo motors?
+A: Type servo followed by the channel number and angle to move a servo. Use servolist to see configured servos, servoprofile to load a profile, and servocalibrate to adjust limits.
+
+Q: What is ESP-NOW mesh?
+A: ESP-NOW mesh connects three or more HardwareOne devices in a multi-hop network. One device is the master. Type espnowmeshrole to set a role and espnowmeshstatus to see the mesh health.
+
+Q: How do I pair an ESP-NOW device?
+A: Type espnowpair followed by the MAC address and a name. Use espnowlist to see paired devices and espnowunpair to remove one.
+
+Q: How do I save settings?
+A: Settings are saved automatically when changed. Type savesettings to force an immediate save to flash storage. Settings persist across reboots.
+
+Q: How do I see automation examples?
+A: Use automationadd followed by a rule. For example, automationadd IF TEMP>30 THEN ledcolor red turns the LED red when temperature exceeds 30. Type automationlist to see all rules.
+
+Q: How do I navigate the OLED menu?
+A: Type oledmode menu to open the main menu. Use the gamepad or OLED buttons to navigate. Each menu item maps to a feature or sensor. Press the select button to choose an option.
+
+Q: How do I check my IP address?
+A: Type wifistatus to see your current IP address, signal strength, and connected network name.
+
+Q: What is my IP address?
+A: Type wifistatus to see the device IP address, connected network, and signal strength.
+
+Q: How do I connect to the web dashboard?
+A: Connect the device to WiFi with wifiadd and openwifi. Then open a browser on the same network and go to the device IP address shown by wifistatus.
+
+Q: How do I update the firmware?
+A: Open the Settings tab in the web UI and use the OTA section to upload a new firmware binary. The device reboots automatically after the update. Settings are preserved.
+
+Q: How do I format the SD card?
+A: Type sdformat to erase and format the SD card. Warning: this deletes all data on the card. Use sdinfo first to check the card status.
+
+Q: approve a pending user registration
+Do: userapprove
+
+Q: approve a waiting account request
+Do: userapprove
+
+Q: accept a user's registration
+Do: userapprove
+
+Q: deny a pending user request
+Do: userdeny
+
+Q: reject a user registration
+Do: userdeny
+
+Q: decline a pending account
+Do: userdeny
+
+Q: see who is waiting to be approved
+Do: pendinglist
+
+Q: show pending account requests
+Do: pendinglist
+
+Q: list users waiting for approval
+Do: pendinglist
+
+Q: promote a user to admin
+Do: userpromote
+
+Q: make a user an admin
+Do: userpromote
+
+Q: give a user admin rights
+Do: userpromote
+
+Q: demote a user from admin
+Do: userdemote
+
+Q: remove admin from a user
+Do: userdemote
+
+Q: take away admin privileges
+Do: userdemote
+
+Q: request an account on the device
+Do: userrequest
+
+Q: register a new user account
+Do: userrequest
+
+Q: sign up for an account
+Do: userrequest
+
+Q: reset a user's password
+Do: userresetpassword
+
+Q: change someone else's password
+Do: userresetpassword
+
+Q: force reset a password
+Do: userresetpassword
+
+Q: sync a user to another device
+Do: usersync
+
+Q: push a user account to a peer
+Do: usersync
+
+Q: show active sessions
+Do: sessionlist
+
+Q: list who is logged in
+Do: sessionlist
+
+Q: see current sessions
+Do: sessionlist
+
+Q: revoke a session
+Do: sessionrevoke
+
+Q: kick a user out
+Do: sessionrevoke
+
+Q: end an active session
+Do: sessionrevoke
+
+Q: generate an HTTPS certificate
+Do: certgen
+
+Q: create a self-signed certificate
+Do: certgen
+
+Q: make a new TLS cert
+Do: certgen
+
+Q: generate an RSA certificate
+Do: certgen rsa
+
+Q: show the HTTPS certificate
+Do: certinfo
+
+Q: check the TLS certificate details
+Do: certinfo
+
+Q: see when the certificate expires
+Do: certinfo
+
+Q: arm voice commands
+Do: voicearm
+
+Q: enable voice execution
+Do: voicearm
+
+Q: activate voice control
+Do: voicearm
+
+Q: disarm voice commands
+Do: voicedisarm
+
+Q: disable voice execution
+Do: voicedisarm
+
+Q: turn off voice arming
+Do: voicedisarm
+
+Q: check if voice commands are armed
+Do: voicestatus
+
+Q: voice arming status
+Do: voicestatus
+
+Q: cancel a voice command
+Do: voicecancel
+
+Q: stop the current voice sequence
+Do: voicecancel
+
+Q: never mind voice command
+Do: voicecancel
+
+Q: what voice commands can I say right now
+Do: voicehelp
+
+Q: show voice options
+Do: voicehelp
+
+Q: check the presence sensor
+Do: presencestatus
+
+Q: is anyone detected
+Do: presenceread
+
+Q: read the presence sensor
+Do: presenceread
+
+Q: motion sensor reading
+Do: presenceread
+
+Q: set the RTC time
+Do: rtcset
+
+Q: set the clock manually
+Do: rtcset
+
+Q: sync RTC to system time
+Do: rtcsync
+
+Q: synchronize the real time clock
+Do: rtcsync
+
+Q: start RTC automatically on boot
+Do: rtcautostart on
+
+Q: disable RTC autostart
+Do: rtcautostart off
+
+Q: calibrate a servo
+Do: servocalibrate
+
+Q: servo calibration
+Do: servocalibrate
+
+Q: check CPU speed
+Do: cpufreq
+
+Q: what is the CPU frequency
+Do: cpufreq
+
+Q: set CPU to 240 MHz
+Do: cpufreq 240
+
+Q: set CPU to 160 MHz
+Do: cpufreq 160
+
+Q: set CPU to 80 MHz
+Do: cpufreq 80
+
+Q: set log level to debug
+Do: loglevel debug
+
+Q: increase logging verbosity
+Do: loglevel debug
+
+Q: set log level to info
+Do: loglevel info
+
+Q: set log level to warn
+Do: loglevel warn
+
+Q: quiet down the logs
+Do: loglevel error
+
+Q: what is the current log level
+Do: loglevel
+
+Q: diagnose the SD card
+Do: sddiag
+
+Q: run SD card hardware test
+Do: sddiag
+
+Q: check SD card hardware
+Do: sddiag
+
+Q: get details about the GPS sensor
+Do: sensorinfo gps
+
+Q: show sensor details
+Do: sensorinfo
+
+Q: what chip is the IMU sensor
+Do: sensorinfo imu
+
+Q: enable WiFi auto reconnect
+Do: wifiautoreconnect 1
+
+Q: disable WiFi auto reconnect
+Do: wifiautoreconnect 0
+
+Q: set WiFi transmit power
+Do: wifitxpower
+
+Q: check WiFi transmit power
+Do: wifigettxpower
+
+Q: set the LED startup animation
+Do: ledstartupeffect
+
+Q: startup LED effect rainbow
+Do: ledstartupeffect rainbow
+
+Q: startup LED effect pulse
+Do: ledstartupeffect pulse
+
+Q: set the startup LED color
+Do: ledstartupcolor
+
+Q: change the boot LED color
+Do: ledstartupcolor blue
+
+Q: set secondary startup color
+Do: ledstartupcolor2
+
+Q: set how long the startup animation plays
+Do: ledstartupduration
+
+Q: startup LED duration 3 seconds
+Do: ledstartupduration 3000
+
+Q: disable the boot LED animation
+Do: ledstartupenabled 0
+
+Q: enable the boot LED animation
+Do: ledstartupenabled 1
+
+Q: How do I approve or deny a user registration request?
+A: Type pendinglist to see pending requests. Use userapprove to approve or userdeny to reject. Only admins can approve or deny accounts.
+
+Q: How do I promote or demote a user?
+A: Type userpromote to grant admin rights or userdemote to remove them. Only admins can change roles.
+
+Q: How do I reset another user's password?
+A: Type userresetpassword followed by the username and new password. Add 1 at the end to force a password change at next login. Requires admin.
+
+Q: How do I request an account?
+A: Type userrequest followed by a username and password. An admin must approve the request before you can log in.
+
+Q: How do I sync a user to another device over ESP-NOW?
+A: Type usersync followed by the username. ESP-NOW user sync must be enabled on both devices.
+
+Q: How do I revoke a session?
+A: Type sessionlist to see active sessions. Use sessionrevoke followed by sid and the session ID to end a specific session, or sessionrevoke user followed by a username to end all sessions for that user.
+
+Q: How do I generate an HTTPS certificate?
+A: Type certgen to create a self-signed ECDSA P-256 certificate. Use certgen rsa for RSA-2048, which takes 30 to 60 seconds. The certificate is saved to flash and used by the HTTPS server automatically.
+
+Q: How do I check the HTTPS certificate?
+A: Type certinfo to see the subject, issuer, key type, validity dates, and days until expiry.
+
+Q: How do I use voice command arming?
+A: Type voicearm to arm voice execution as the current user. Say commands after the wake word and they will execute. Type voicedisarm to disable it and voicestatus to check the current state.
+
+Q: How do I use the presence sensor?
+A: Type openpresence to start the STHS34PF80 sensor. Use presenceread to get a motion and temperature reading and presencestatus to see sensor state and thresholds.
+
+Q: How do I set the real time clock?
+A: Type rtcset followed by the date and time in YYYY-MM-DD HH:MM:SS format. Use rtcsync to copy the time between the RTC module and system clock in either direction.
+
+Q: How do I calibrate a servo?
+A: Type servocalibrate followed by the channel number. Follow the prompts to set minimum, center, and maximum pulse widths for that channel.
+
+Q: How do I adjust CPU speed?
+A: Type cpufreq to see the current frequency. Type cpufreq followed by 80, 160, or 240 to change it. Lower frequencies reduce power use.
+
+Q: How do I control log verbosity?
+A: Type loglevel followed by error, warn, info, or debug. Type loglevel with no argument to see the current level.
+
+Q: How do I diagnose SD card problems?
+A: Type sddiag to run low-level hardware diagnostics including SPI bus checks and read/write tests.
+
+Q: How do I get details about a connected sensor?
+A: Type sensorinfo followed by the sensor name such as gps, imu, or thermal. It shows the chip type, firmware version, I2C address, and current state.
+
+Q: How do I configure WiFi reconnection?
+A: Type wifiautoreconnect 1 to reconnect automatically if the network drops. Type wifiautoreconnect 0 to disable it.
+
+Q: How do I adjust WiFi transmit power?
+A: Type wifitxpower followed by the power in dBm to set it. Type wifigettxpower to read the current value. Higher power improves range but uses more battery.
+
+Q: How do I configure the boot LED animation?
+A: Use ledstartupeffect to pick an animation like rainbow, pulse, or fade. Use ledstartupcolor and ledstartupcolor2 for colors, ledstartupduration for how long it runs in milliseconds, and ledstartupenabled 0 to turn it off.
