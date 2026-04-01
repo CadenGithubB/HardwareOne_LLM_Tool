@@ -599,13 +599,69 @@ def main() -> None:
             padding=False,
         )
 
+    # Pre-compute marker token ids for question masking
+    _a_marker_ids = tokenizer.encode("\nA:", add_special_tokens=False)
+    _a_marker_len = len(_a_marker_ids)
+    _do_marker_ids = tokenizer.encode("\nDo:", add_special_tokens=False)
+    _do_marker_len = len(_do_marker_ids)
+    _q_marker_ids = tokenizer.encode("\nQ:", add_special_tokens=False)
+    _q_marker_len = len(_q_marker_ids)
+    _q_start_ids = tokenizer.encode("Q:", add_special_tokens=False)
+    _q_start_len = len(_q_start_ids)
+
+    def _build_label_mask(ids: list[int]) -> list[int]:
+        """Mask question tokens (-100), keep answer/Do:/prose tokens for training."""
+        n = len(ids)
+        answer_starts: list[int] = []
+        for i in range(n - max(_a_marker_len, _do_marker_len) + 1):
+            if ids[i:i + _a_marker_len] == _a_marker_ids:
+                answer_starts.append(i + _a_marker_len)
+            elif ids[i:i + _do_marker_len] == _do_marker_ids:
+                answer_starts.append(i + _do_marker_len)
+        if not answer_starts:
+            return list(ids)  # prose — train on all tokens
+        question_starts: list[int] = []
+        if _q_start_len <= n and ids[:_q_start_len] == _q_start_ids:
+            question_starts.append(0)
+        for i in range(n - _q_marker_len + 1):
+            if ids[i:i + _q_marker_len] == _q_marker_ids:
+                question_starts.append(i)
+        question_starts.sort()
+        labels = [-100] * n
+        for ans_pos in answer_starts:
+            next_q = n
+            for qs in question_starts:
+                if qs > ans_pos:
+                    next_q = qs
+                    break
+            for j in range(ans_pos, min(next_q, n)):
+                labels[j] = ids[j]
+        return labels
+
     if args.text:
         # Q&A boundary-aware mode: each paragraph (one Q: ... A: ... block) is
         # tokenized independently and truncated to seq_len. group_texts() is NOT
         # used, so Q→A pairs are never split across training block boundaries.
         print(f"Mode: Q&A boundary-aware (each paragraph = one training block, truncated to {args.seq_len})")
         tok_ds = ds_raw.map(tokenize, batched=True, remove_columns=["text"])
-        lm_ds = tok_ds.filter(lambda ex: len(ex["input_ids"]) > 0)
+        tok_ds = tok_ds.filter(lambda ex: len(ex["input_ids"]) > 0)
+
+        # Apply question masking: mask Q tokens, train only on A/Do tokens
+        block_size = args.seq_len
+        def pack_qa_blocks(examples):
+            blocks = []
+            labels_list = []
+            for ids in examples["input_ids"]:
+                if not ids:
+                    continue
+                entry = list(ids[:block_size]) if len(ids) > block_size else list(ids)
+                entry_labels = _build_label_mask(entry)
+                pad_len = block_size - len(entry)
+                blocks.append(entry + [eos_id] * pad_len)
+                labels_list.append(entry_labels + [-100] * pad_len)
+            return {"input_ids": blocks, "labels": labels_list}
+
+        lm_ds = tok_ds.map(pack_qa_blocks, batched=True, remove_columns=tok_ds.column_names)
 
         # ── Q&A boundary debug ────────────────────────────────────────────────
         q_id = tokenizer.convert_tokens_to_ids("Q:")
@@ -679,18 +735,29 @@ def main() -> None:
     collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
 
     use_cuda = torch.cuda.is_available()
+
+    # Compute warmup steps: ramp LR from ~0 over the first 6% of training
+    _steps_per_epoch = max(1, len(lm_ds) // args.batch_size)
+    _total_steps = int(_steps_per_epoch * args.epochs // args.grad_accum)
+    _warmup_steps = max(1, int(_total_steps * 0.06))
+
     ta_kw: dict = dict(
         output_dir=str(out_dir / "trainer_ckpt"),
         num_train_epochs=args.epochs,
         per_device_train_batch_size=args.batch_size,
         gradient_accumulation_steps=args.grad_accum,
         learning_rate=args.lr,
+        lr_scheduler_type="cosine",                 # smooth ease-in/ease-out LR curve
+        warmup_steps=_warmup_steps,                # ramp LR from ~0 over first 6% of steps
+        label_smoothing_factor=0.1,                # train toward 90% confidence — prevents spiky distributions
+        weight_decay=0.01,                         # L2 regularization
         logging_steps=20,
         save_steps=10_000,
         save_total_limit=1,
         prediction_loss_only=True,
         fp16=use_cuda,
         gradient_checkpointing=args.gradient_checkpointing,
+        report_to="none",
     )
     if args.max_steps is not None and args.max_steps > 0:
         ta_kw["max_steps"] = args.max_steps
