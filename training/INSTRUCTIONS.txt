@@ -92,6 +92,9 @@ TRAINING DATA FILES
 
     training_scripts/
         run_all_checks.py                 Run all data quality checks at once
+        deep_error_analysis.py            12-check structural and content analysis
+        validate_training_data.py         Format and command validation
+        shuffle_training_data.py          Randomize training block order
         check_hallucinated_sensors.py     Flag invalid chip names
         check_answer_consistency.py       Verify facts match across answers
         answer_frequency_balance.py       Report answer repetition balance

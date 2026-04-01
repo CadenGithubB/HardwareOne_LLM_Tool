@@ -14,11 +14,11 @@ HardwareOne LLM Tool trains ultra-compact GPT-2 style language models on a PC an
 
 ### Key Features
 
-- **Tiny Models**: 4K vocab, 18 layers, ~7.3 MB quantized
+- **Tiny Models**: 4K vocab, 16 layers, ~7.3 MB quantized
 - **PC-Based Training**: Train on any machine with Python and PyTorch (GPU strongly recommended)
 - **INT8 Quantization**: Browser-based converter produces a single `model.bin` for the device
 - **Q&A Optimized**: Boundary-aware packing prevents answer bleed across training blocks
-- **Two-Phase Training**: Positive Q&A examples followed by negative out-of-domain corrections
+- **Do: Command Suggestions**: Model can suggest CLI commands the user can edit and execute
 - **Hardware One Integration**: Drop the converted `model.bin` on the SD card and it runs
 
 ---
@@ -44,17 +44,28 @@ pip install torch --index-url https://download.pytorch.org/whl/cu124
 ### 2. Train Your Model
 
 ```bash
-python training/train_tiny_model_gpu.py \
+cd training
+
+python train_tiny_model_gpu.py \
     --preset HW1HelpAgent192_deep \
-    --text training/hardwareone_rich.txt \
-    --negatives training/training_data/hardwareone_qa_negatives.txt \
-    --epochs 150 --lr 3e-4 --batch-size 16 \
+    --text training_data/hardwareone_rich.txt \
+    --epochs 250 --lr 3e-4 --batch-size 16 \
     --out ./out_HW1HelpAgent192_deep
 ```
 
-Training takes ~30-60 minutes on a modern GPU. CPU training is possible but slow (many hours).
+CPU training (slower, use if no GPU):
 
-See `training/INSTRUCTIONS.txt` for full details including CPU training commands.
+```bash
+python train_tiny_model.py \
+    --preset HW1HelpAgent192_deep \
+    --text training_data/hardwareone_rich.txt \
+    --epochs 400 --batch-size 8 --lr 3e-4 \
+    --out ./out_HW1HelpAgent192_deep
+```
+
+Training takes ~30-60 minutes on a modern GPU. CPU training works but is much slower (many hours).
+
+See `training/INSTRUCTIONS.txt` for full details including all presets and the converter workflow.
 
 ### 3. Convert to ESP32 Format
 
@@ -74,10 +85,21 @@ Copy `model.bin` to `/sd/llm/` on the SD card or upload via the web Files page. 
 ### Training (`training/`)
 - `train_tiny_model_gpu.py` — GPU training script (recommended)
 - `train_tiny_model.py` — CPU training script
-- `hardwareone_rich.txt` — Complete training corpus (Q&A pairs, passages, conversations)
-- `training_data/hardwareone_qa_negatives.txt` — Out-of-domain corrections for Phase 2
-- `requirements.txt` — Python dependencies
+- `training_data/hardwareone_rich.txt` — Complete training corpus (Q&A pairs, Do: command pairs, prose passages)
 - `INSTRUCTIONS.txt` — Detailed training guide and preset reference
+- `requirements.txt` — Python dependencies
+
+### Training Scripts (`training/training_scripts/`)
+- `run_all_checks.py` — Run all data quality checks at once
+- `deep_error_analysis.py` — 12-check structural and content analysis
+- `validate_training_data.py` — Format and command validation
+- `shuffle_training_data.py` — Randomize training block order
+- `check_hallucinated_sensors.py` — Flag invalid chip names
+- `check_answer_consistency.py` — Verify facts match across answers
+- `answer_frequency_balance.py` — Report answer repetition balance
+- `find_near_duplicate_answers.py` — Find 75%+ word-overlap answer pairs
+- `topic_coverage_report.py` — Count Q&A pairs per topic
+- `prose_analysis.py` — Check prose lengths and topic coverage
 
 ### Converter (root)
 - `index.html` — Browser-based INT8 quantization converter
@@ -96,12 +118,11 @@ Copy `model.bin` to `/sd/llm/` on the SD card or upload via the web Files page. 
 
 | Preset | Vocab | Layers | Dim | FFN | PSRAM (INT8) | Notes |
 |--------|-------|--------|-----|-----|--------------|-------|
-| **HW1HelpAgent192_deep** | 4K | 16 | 192 | 512 | ~7.7 MB | **Recommended** — 2.67× FFN ratio, ~504KB headroom |
+| **HW1HelpAgent192_deep** | 4K | 16 | 192 | 512 | ~7.7 MB | **Recommended** — best quality/size tradeoff |
 | HW1HelpAgent | 4K | 22 | 128 | 768 | ~7.5 MB | Proven fallback, wide FFN |
 | HW1HelpAgent192 | 4K | 12 | 192 | 768 | ~7.5 MB | Wider per-layer but shallower |
-| narrow3 | 4K | 18 | 128 | 768 | ~6.9 MB | Previous default |
 
-All presets target 8MB PSRAM on ESP32-S3. See `training/INSTRUCTIONS.txt` for full list.
+All presets target 8MB PSRAM on ESP32-S3. See `training/INSTRUCTIONS.txt` for the full preset list.
 
 ---
 
@@ -110,9 +131,16 @@ All presets target 8MB PSRAM on ESP32-S3. See `training/INSTRUCTIONS.txt` for fu
 ### Boundary-Aware Q&A Packing
 Q&A pairs are packed into fixed 128-token training blocks without splitting any pair across a boundary. Before this fix, ~39% of pairs were corrupted by being split mid-answer. The model now learns clean, complete Q&A associations.
 
-### Two-Phase Learning
-1. **Phase 1** (~150 epochs): Learn positive Q&A associations from `hardwareone_rich.txt`
-2. **Phase 2**: Apply negative corrections from `hardwareone_qa_negatives.txt` to prevent conflating similar topics (ESP-NOW vs WiFi, MQTT vs direct, etc.)
+### Three Training Pair Types
+- **Q:/A:** — Standard question-answer pairs for knowledge retrieval
+- **Q:/Do:** — Question paired with a short CLI command suggestion (e.g. `Do: opentof`)
+- **Prose passages** — Topic descriptions that provide background context
+
+### Instruction Verb Diversity
+Answers use varied instruction verbs ("Type X", "Run X", "Use X", "The command is X") to prevent the model from over-predicting any single high-frequency token pattern.
+
+### Topic Vocabulary Isolation
+Question phrasings are varied for reinforcement (5 copies per answer) while keeping vocabulary strictly within each topic — WiFi questions don't use MQTT words, sensor questions don't use networking terms.
 
 ---
 
