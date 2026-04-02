@@ -1,33 +1,47 @@
 #!/usr/bin/env python3
-"""
-Train a GPT-2–compatible LM for the esp32-llm-converter (browser INT8/FP32 → model.bin).
+“””
+Train the HardwareOne on-device LLM — CPU edition.
 
-Install (once):
-  pip install torch transformers datasets tokenizers accelerate
+CPU trainer for the HW1HelpAgent192_deep model (dim=192, 16 layers, 6 heads,
+FFN=512, seq=128, 4K vocab). Slow — use the GPU trainer if possible.
 
-Example:
-  # 1) Put some plain text in data.txt (more text = better tokenizer + model)
-  python train_tiny_model.py --text data.txt --out ./my_tiny_gpt2
+──────────────────────────────────────────────────────────────────────────────
+SETUP (run once):
+  pip install -r requirements.txt
 
-  # 2) Or stream a slice of TinyStories (downloads ~data~ on first run)
-  python train_tiny_model.py --dataset tiny_stories --max_samples 50000 --out ./my_tiny_gpt2
+──────────────────────────────────────────────────────────────────────────────
+USAGE:
 
-  # 3) Presets: micro … xlarge, plus ESP32-S3 8 MB targets: baseline / leaner / stretch
-  python train_tiny_model.py --preset small --dataset tiny_stories --max_samples 100000 --out ./out_small
-  python train_tiny_model.py --preset leaner --dataset tiny_stories --max_samples 200000 --out ./out_leaner
+  # HardwareOne help agent (recommended):
+  python train_tiny_model.py \\
+      --preset HW1HelpAgent192_deep \\
+      --text training_data/hardwareone_rich.txt \\
+      --epochs 400 --lr 3e-4 --batch-size 8 \\
+      --out ./out_HW1HelpAgent192_deep
 
-  # 4) Parameter count only (compare to device PSRAM before training)
-  python train_tiny_model.py --preset small --estimate-only
+  # Parameter count / PSRAM estimate only (no training):
+  python train_tiny_model.py --preset HW1HelpAgent192_deep --estimate-only
 
-  # 5) Large preset on one GPU: small batch + accumulation + checkpointing
-  python train_tiny_model.py --preset large --dataset tiny_stories --max_samples 200000 --out ./out_l \\
-      --batch-size 1 --grad-accum 8 --gradient-checkpointing
+──────────────────────────────────────────────────────────────────────────────
+AFTER TRAINING:
 
-  # 6) Open index.html → drop the output folder → Convert
+  1) Open index.html in Chrome/Edge (no server needed — open directly from disk)
+  2) Drop the output folder onto the converter page
+  3) Select INT8 quantization, group size 128 (defaults)
+  4) Click Convert → Download → saves model.bin
+  5) Copy model.bin to SD card at /sd/llm/ or upload via the web Files tab
+  6) From the CLI: llm load /sd/llm/model.bin
 
-Without --preset, defaults match the original script (64 dim, 4 layers). ESP32 devices need a
-*much* smaller architecture than “medium/large” presets — use --estimate-only and firmware docs.
-"""
+  Loss should fall from ~7 to ~0.1–0.3.
+
+──────────────────────────────────────────────────────────────────────────────
+PRESET REFERENCE (ESP32-S3 8 MB PSRAM, INT8 + group_size=128):
+
+  HW1HelpAgent192_deep  4K vocab, dim=192, 16 layers, FFN=512  ~7.7 MB  ← USE THIS
+  HW1HelpAgent          4K vocab, dim=128, 22 layers, FFN=768  ~7.5 MB
+  HW1HelpAgent192       4K vocab, dim=192, 12 layers, FFN=768  ~7.6 MB
+  HW1HelpAgent256       4K vocab, dim=256,  8 layers, FFN=768  ~7.8 MB
+“””
 
 from __future__ import annotations
 
@@ -167,15 +181,16 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--n-head", type=int, default=8, help="Attention heads (must divide n-embd)")
     p.add_argument("--n-inner", type=int, default=None, help="FFN hidden (default: 4 * n-embd)")
     p.add_argument("--seq-len", type=int, default=128, help="Context length (blocks for LM)")
-    p.add_argument("--epochs", type=float, default=1.0)
+    p.add_argument("--epochs", type=float, default=400.0,
+                   help="Training epochs (default 400 for HW1HelpAgent192_deep on hardwareone_rich.txt)")
     p.add_argument(
         "--max-steps",
         type=int,
         default=None,
         help="Stop after N optimizer steps (overrides --epochs). Use for smoke runs, e.g. --max-steps 15",
     )
-    p.add_argument("--batch-size", type=int, default=4)
-    p.add_argument("--lr", type=float, default=5e-4)
+    p.add_argument("--batch-size", type=int, default=8)
+    p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--max-samples", type=int, default=None, help="Cap training rows (TinyStories)")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument(
