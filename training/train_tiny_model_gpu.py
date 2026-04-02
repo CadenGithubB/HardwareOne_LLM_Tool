@@ -1,61 +1,61 @@
 #!/usr/bin/env python3
 """
-Train a GPT-2–compatible LM for the esp32-llm-converter — NVIDIA GPU edition.
+Train the HardwareOne on-device LLM — NVIDIA GPU edition.
 
-This is a GPU-optimized copy of train_tiny_model.py. It auto-detects CUDA and
-enables bf16 (Ampere+), torch.compile, and larger batch sizes for maximum throughput.
-On a modern GPU (RTX 3060/4060+), expect 5-10x faster than CPU.
+GPU-optimized trainer for the HW1HelpAgent192_deep model (dim=192, 16 layers,
+6 heads, FFN=512, seq=128, 4K vocab). Auto-detects CUDA and enables bf16
+(Ampere+) for fast training.
 
 ──────────────────────────────────────────────────────────────────────────────
-SETUP (run once on the GPU machine):
+SETUP (run once):
 
-  # 1) Install Python deps (CUDA 12.x):
-  pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-  pip install transformers datasets tokenizers accelerate
+  # CUDA 12.1:
+  pip install torch --index-url https://download.pytorch.org/whl/cu121
+  pip install -r requirements.txt
 
-  # 2) Verify GPU is visible:
+  # Verify GPU:
   python -c "import torch; print(torch.cuda.get_device_name(0))"
 
 ──────────────────────────────────────────────────────────────────────────────
 USAGE:
 
-  # ESP32-S3 stretch model (8K vocab, 18 layers) — recommended first run:
-  python train_tiny_model_gpu.py --preset stretch \\
-      --dataset tiny_stories --max-samples 200000 --epochs 5 \\
-      --out ./out_stretch
+  # HardwareOne help agent — recommended:
+  python train_tiny_model_gpu.py \\
+      --preset HW1HelpAgent192_deep \\
+      --text training_data/hardwareone_rich.txt \\
+      --epochs 250 --lr 3e-4 --batch-size 16 \\
+      --out ./out_HW1HelpAgent192_deep
 
-  # Leaner (8K vocab, 15 layers):
-  python train_tiny_model_gpu.py --preset leaner \\
-      --dataset tiny_stories --max-samples 200000 --epochs 5 \\
-      --out ./out_leaner
+  # Parameter count / PSRAM estimate only (no training):
+  python train_tiny_model_gpu.py --preset HW1HelpAgent192_deep --estimate-only
 
-  # Baseline (16K vocab, 12 layers):
-  python train_tiny_model_gpu.py --preset baseline \\
-      --dataset tiny_stories --max-samples 200000 --epochs 5 \\
-      --out ./out_baseline
-
-  # Parameter count only (no training):
-  python train_tiny_model_gpu.py --preset stretch --estimate-only
-
-  # Custom data:
-  python train_tiny_model_gpu.py --preset stretch --text mydata.txt --out ./out_custom
+  # Fine-tune from existing weights with new data:
+  python train_tiny_model_gpu.py \\
+      --preset HW1HelpAgent192_deep \\
+      --finetune-from ./out_HW1HelpAgent192_deep \\
+      --text training_data/hardwareone_rich.txt \\
+      --epochs 50 --lr 1e-4 --batch-size 16 \\
+      --out ./out_finetuned
 
 ──────────────────────────────────────────────────────────────────────────────
 AFTER TRAINING:
 
-  1) Copy the output folder to the machine with the converter
-  2) Open index.html in the esp32-llm-converter directory
-  3) Drag the output folder into the converter
-  4) Select INT8 output format
-  5) Download model.bin → upload to ESP32 SD card
+  1) Open index.html in Chrome/Edge (no server needed — open directly from disk)
+  2) Drop the output folder (./out_HW1HelpAgent192_deep) onto the converter page
+  3) Select INT8 quantization, group size 128 (defaults)
+  4) Click Convert → Download → saves model.bin
+  5) Copy model.bin to SD card at /sd/llm/ or upload via the web Files tab
+  6) From the CLI: llm load /sd/llm/model.bin
 
-ESP32-S3 8 MB PSRAM targets (all use INT8 + group_size=128, ctx=64 on device):
-  narrow2  →  4K vocab, dim=128, 20 layers, ~4.7 MB wts + ~1.3 MB KV = ~6.9 MB  ← deep domain Q&A, head_size=32
-  narrow   →  4K vocab, dim=256,  8 layers, ~5.1 MB wts + ~1.0 MB KV = ~6.1 MB  ← wide attention domain, head_size=32
-  stretch2 →  8K vocab, dim=128, 20 layers, ~5.4 MB wts + ~1.3 MB KV = ~6.7 MB  ← general, wider FFN
-  stretch  →  8K vocab, dim=128, 18 layers, ~4.4 MB wts + ~1.1 MB KV = ~5.5 MB  ← general depth
-  leaner   →  8K vocab, dim=128, 15 layers, ~3.8 MB wts + ~0.9 MB KV = ~4.7 MB  ← lean general
-  baseline → 16K vocab, dim=128, 12 layers, ~4.5 MB wts + ~0.8 MB KV = ~5.3 MB  ← broadest vocab
+  Loss should fall from ~7 to ~0.1–0.3. The script runs a Q&A test on finish.
+
+──────────────────────────────────────────────────────────────────────────────
+PRESET REFERENCE (ESP32-S3 8 MB PSRAM, INT8 + group_size=128):
+
+  HW1HelpAgent192_deep  4K vocab, dim=192, 16 layers, FFN=512  ~7.7 MB  ← USE THIS
+  HW1HelpAgent          4K vocab, dim=128, 22 layers, FFN=768  ~7.5 MB
+  HW1HelpAgent192       4K vocab, dim=192, 12 layers, FFN=768  ~7.6 MB
+  HW1HelpAgent256       4K vocab, dim=256,  8 layers, FFN=768  ~7.8 MB
 """
 
 from __future__ import annotations
@@ -195,13 +195,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--n-head",    type=int,  default=8)
     p.add_argument("--n-inner",   type=int,  default=None)
     p.add_argument("--seq-len",   type=int,  default=128)
-    p.add_argument("--epochs",    type=float, default=3.0,
-                   help="Training epochs (default 3 — more than CPU default for better quality)")
+    p.add_argument("--epochs",    type=float, default=250.0,
+                   help="Training epochs (default 250 for HW1HelpAgent192_deep on hardwareone_rich.txt)")
     p.add_argument("--max-steps", type=int, default=None,
                    help="Stop after N steps (smoke test). Omit for full training.")
-    p.add_argument("--batch-size", type=int, default=128,
-                   help="Per-GPU batch size (default 128; try 512-2048 on 16GB+ VRAM)")
-    p.add_argument("--lr",         type=float, default=5e-4)
+    p.add_argument("--batch-size", type=int, default=16,
+                   help="Per-GPU batch size (default 16 for HardwareOne training data)")
+    p.add_argument("--lr",         type=float, default=3e-4)
     p.add_argument("--max-samples",type=int,   default=None)
     p.add_argument("--seed",       type=int,   default=42)
     p.add_argument("--grad-accum", type=int,   default=1, metavar="N",
