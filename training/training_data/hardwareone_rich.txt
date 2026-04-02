@@ -5953,3 +5953,126 @@ BLE settings control the Bluetooth Low Energy radio. Type blesetname to change t
 Edge Impulse runs TFLite machine learning models on the device. Load a model with eifile, start inference with eienable, and run it continuously with eicontinuous. Models can classify audio, motion, or other sensor data. Check results with eistatus and tracking with eitrackstatus.
 
 The image system manages pictures stored on the device. Type imagelist to see all stored images, imageupload to add one from a browser, imagedownload to retrieve one, and imagedelete to remove one. Images are stored on the SD card or internal flash.
+
+Q: What is WiFi?
+A: WiFi is the wireless network connection. HardwareOne connects to your router via WiFi for internet access and the web dashboard. Type openwifi to connect.
+
+Q: What is WiFi on this device?
+A: WiFi lets the device join your local network through a router. It enables the web dashboard, OTA updates, MQTT, and NTP time sync.
+
+Q: What is the WiFi feature?
+A: WiFi connects HardwareOne to a router for internet and local network access. Use wifiadd to save a network and openwifi to connect.
+
+Q: What is BLE?
+A: BLE is Bluetooth Low Energy. HardwareOne uses it to scan for nearby devices and connect to peripherals for short-range wireless communication.
+
+Q: What is Bluetooth?
+A: Bluetooth Low Energy lets HardwareOne communicate with nearby devices wirelessly. Type openble to start and blescan to discover peripherals.
+
+Q: What is Bluetooth Low Energy?
+A: BLE is a low-power wireless protocol for short-range communication. HardwareOne can scan, connect, and exchange data with BLE peripherals.
+
+Q: What are NeoPixels?
+A: NeoPixels are addressable RGB LEDs. HardwareOne drives a strip of them for status indicators, animations, and custom colours via ledcolor and ledanim commands.
+
+Q: What is the LED strip?
+A: The LED strip uses WS2812 NeoPixels. Each pixel can be set to any colour independently. Type ledcolor to set a colour or ledanim to play an animation.
+
+Q: What is NeoPixel?
+A: NeoPixel is the brand name for WS2812 addressable RGB LEDs. HardwareOne drives a strip for status lights and animations via the led commands.
+
+Q: What is the OLED?
+A: The OLED is a small I2C display on the device. It shows status information, sensor readings, and menu pages. Type openoled to start it.
+
+Q: What is the OLED display?
+A: The OLED is a 128x64 pixel screen connected via I2C. It displays device status, sensor data, and navigation menus controlled by the gamepad.
+
+Q: What is the OLED screen?
+A: HardwareOne has a small OLED display for showing status, sensor readings, and menus. Use openoled to activate it and oledpage to change pages.
+
+Q: What is the file system?
+A: HardwareOne uses an SD card and internal flash for file storage. Type filelist to browse files, fileread to view contents, and filewrite to create new files.
+
+Q: What is the SD card used for?
+A: The SD card stores files, logs, LLM models, images, and recordings. Type filelist to see stored files and fileinfo to check card capacity.
+
+Q: What is file storage?
+A: Files are stored on the SD card or internal flash. Use filelist to browse, fileread to view, filewrite to create, and filedelete to remove files.
+
+Q: What is the web dashboard?
+A: The web dashboard is a browser-based control panel served by the device. It shows sensors, files, settings, and LLM chat. Connect via WiFi and open the device IP.
+
+Q: What is the web interface?
+A: The web UI runs on the device and is accessible from any browser on the same network. It provides tabs for sensors, files, OTA, settings, and the LLM.
+
+Q: What is the web UI?
+A: HardwareOne hosts a web dashboard over WiFi. Open the device IP in a browser to see sensor data, manage files, update firmware, and chat with the LLM.
+
+Q: What are users?
+A: The user system controls who can access the device. Admins can add or remove users with useradd and userdelete. Type userlist to see all registered users.
+
+Q: What is user authentication?
+A: Authentication restricts device access to registered users. Each user has a name and role. Type useradd to create one and userlist to see existing users.
+
+Q: What is the user system?
+A: HardwareOne supports multiple user accounts with roles. Admins manage access with useradd, userdelete, and userlist. Users log in through the web dashboard.
+
+Q: What is the CLI?
+A: The CLI is the command line interface. You type commands directly via the serial console or web terminal. Type help to see all available commands.
+
+Q: What is the command line?
+A: The command line lets you control HardwareOne by typing text commands. Access it via serial USB or the web dashboard terminal. Type help to get started.
+
+Q: What is the serial console?
+A: The serial console is a text interface over USB. Connect at 115200 baud to type commands and see device output. Type help to list available commands.
+
+Q: What is memory management?
+A: HardwareOne tracks heap and PSRAM usage. Type memreport to see free memory, memsample to log a snapshot, and memhistory to view usage over time.
+
+Q: What is the heap?
+A: The heap is the pool of free RAM available to the device. Type memreport to check how much is free. PSRAM provides additional memory for large buffers.
+
+Q: What is PSRAM?
+A: PSRAM is extra external RAM on the ESP32-S3. HardwareOne uses it for large buffers like the LLM model, thermal images, and audio recordings.
+
+Q: What is the camera?
+A: HardwareOne supports a DVP camera module for capturing still images. Use opencamera to start and cameracapture to take a photo stored on the SD card.
+
+Q: What is DVP?
+A: DVP is the digital video port interface for the camera module. Type opencamera to initialise it and cameracapture to take a picture.
+
+Q: What is speech recognition?
+A: Speech recognition listens to the microphone and converts spoken words to text commands. Use srsnipon to start listening and srsnipstatus to check the recogniser state.
+
+Q: What is voice recognition?
+A: HardwareOne can recognise spoken keywords through the microphone. Type srsnipon to start and srsnipstatus to check if it is listening.
+
+Q: What are automations?
+A: Automations are rules that trigger actions when conditions are met. For example, turn on an LED when temperature exceeds a threshold. Type automationlist to see all rules.
+
+Q: What is automation?
+A: The automation system runs if-then rules on sensor data. Create rules with automationadd and list them with automationlist. Rules execute commands automatically.
+
+Q: What is debug mode?
+A: Debug mode increases log output for troubleshooting. Type debug followed by a module name to toggle verbose logging. Use log start to save output to a file.
+
+Q: What is logging?
+A: Logging records device output to a file on the SD card. Type log start to begin, log stop to end, and log status to check if logging is active.
+
+Q: What is sleep mode?
+A: Sleep mode powers down the device to save energy. Type sleep for deep sleep or lightsleep for a lighter mode that wakes faster. Both reduce battery drain.
+
+Q: What is deep sleep?
+A: Deep sleep shuts down most of the device to minimise power usage. The device wakes on a timer, button press, or external signal. Use sleep to enter it.
+
+Q: What is HTTPS?
+A: HTTPS encrypts web traffic between the device and browsers. Use certgen to create a self-signed certificate and httpstart to serve the dashboard over HTTPS.
+
+Q: What are certificates?
+A: TLS certificates enable encrypted HTTPS connections. Type certgen to generate a self-signed certificate and certinfo to view the current certificate details.
+
+Q: What is timezone support?
+A: The tzoffsetminutes command sets the UTC offset in minutes for the device clock. This adjusts displayed times without changing the underlying system clock.
+
+Q: What is the battery monitor?
+A: HardwareOne can read battery voltage through an ADC pin. Type batterystatus to see the current voltage and estimated charge level.
