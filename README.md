@@ -10,6 +10,8 @@ Part of the [Hardware One](https://github.com/CadenGithubB/HardwareOne) ecosyste
 
 HardwareOne LLM Tool trains ultra-compact GPT-2 style language models on a PC and converts them to run entirely on the ESP32-S3 microcontroller using only 8MB of PSRAM. No cloud, no internet required at runtime — the model runs locally on the device.
 
+**The trainer is domain-agnostic — you bring your own training corpus.** The same toolchain can produce a firmware help agent, a Pokédex, or any other tiny knowledge model. HardwareOne is the reference example; see [`Training Materials/`](Training%20Materials/) for ready-to-use example packages (HardwareOne Help Agent, Kanto Pokemon Master).
+
 **Training happens on your PC. The model runs on the ESP32. Nothing is trained on the device.**
 
 ### Key Features
@@ -41,16 +43,26 @@ pip install torch --index-url https://download.pytorch.org/whl/cu121
 pip install torch --index-url https://download.pytorch.org/whl/cu124
 ```
 
-### 2. Train Your Model
+### 2. Prepare your data
+
+Your corpus is a `.txt` of blocks separated by blank lines — `Q:`/`A:` pairs,
+optional `Q:`/`Do:` command pairs, and prose passages. Copy
+[`training_data/template.txt`](training/training_data/template.txt) and fill in
+your own facts. If your domain has multi-word terms or commands that must stay
+whole in the tokenizer, list them in a file and pass `--special-tokens`.
+
+### 3. Train Your Model
 
 ```bash
 cd training
 
 python train_tiny_model_gpu.py \
     --preset HW1HelpAgent192_deep \
-    --text training_data/hardwareone_rich.txt \
+    --text training_data/YOUR_DATA.txt \
+    --qa-test-prompts training_data/YOUR_TEST_PROMPTS.txt \
     --epochs 250 --lr 3e-4 --batch-size 16 \
-    --out ./out_HW1HelpAgent192_deep
+    --out ./out_mymodel
+    # add: --special-tokens training_data/YOUR_TOKENS.txt   (optional)
 ```
 
 CPU training (slower, use if no GPU):
@@ -58,23 +70,23 @@ CPU training (slower, use if no GPU):
 ```bash
 python train_tiny_model.py \
     --preset HW1HelpAgent192_deep \
-    --text training_data/hardwareone_rich.txt \
+    --text training_data/YOUR_DATA.txt \
     --epochs 400 --batch-size 8 --lr 3e-4 \
-    --out ./out_HW1HelpAgent192_deep
+    --out ./out_mymodel
 ```
 
 Training takes ~30-60 minutes on a modern GPU. CPU training works but is much slower (many hours).
 
 See `training/INSTRUCTIONS.txt` for full details including all presets and the converter workflow.
 
-### 3. Convert to ESP32 Format
+### 4. Convert to ESP32 Format
 
 1. Open `index.html` in Chrome/Edge/Firefox
 2. Drag the output folder (`./out_HW1HelpAgent192_deep`) onto the page
 3. Select **INT8 quantization**, group size **128**
 4. Click **Convert**, then **Download** — saves `model.bin`
 
-### 4. Deploy to Hardware One
+### 5. Deploy to Hardware One
 
 Copy `model.bin` to `/sd/llm/` on the SD card or upload via the web Files page. Load it from the LLM tab or CLI.
 
@@ -85,9 +97,14 @@ Copy `model.bin` to `/sd/llm/` on the SD card or upload via the web Files page. 
 ### Training (`training/`)
 - `train_tiny_model_gpu.py` — GPU training script (recommended)
 - `train_tiny_model.py` — CPU training script
-- `training_data/hardwareone_rich.txt` — Complete training corpus (Q&A pairs, Do: command pairs, prose passages)
+- `training_data/template.txt` — **Start here** — blank template showing the data format
+- `training_data/hardwareone_rich.txt` — Example corpus: firmware help agent
+- `training_data/hardwareone_special_tokens.txt` — Whole-word command tokens for the HardwareOne example (`--special-tokens`)
+- `training_data/pokemon_kanto.txt` — Example corpus: Gen-1 Kanto Pokédex
 - `INSTRUCTIONS.txt` — Detailed training guide and preset reference
 - `requirements.txt` — Python dependencies
+
+> 📦 Ready-to-use training packages for each example model live in [`Training Materials/`](Training%20Materials/).
 
 ### Training Scripts (`training/training_scripts/`)
 - `run_all_checks.py` — Run all data quality checks at once

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-“””
+"""
 Train the HardwareOne on-device LLM — CPU edition.
 
 CPU trainer for the HW1HelpAgent192_deep model (dim=192, 16 layers, 6 heads,
@@ -41,7 +41,7 @@ PRESET REFERENCE (ESP32-S3 8 MB PSRAM, INT8 + group_size=128):
   HW1HelpAgent          4K vocab, dim=128, 22 layers, FFN=768  ~7.5 MB
   HW1HelpAgent192       4K vocab, dim=192, 12 layers, FFN=768  ~7.6 MB
   HW1HelpAgent256       4K vocab, dim=256,  8 layers, FFN=768  ~7.8 MB
-“””
+"""
 
 from __future__ import annotations
 
@@ -108,13 +108,14 @@ PRESETS: dict[str, dict[str, int]] = {
     "HW1HelpAgent192": {"vocab_size": 4096, "n_embd": 192, "n_layer": 12, "n_head": 6, "seq_len": 128, "n_inner": 768},
     # "HW1HelpAgent192_deep": dim=192 / 16 layers / 6 heads / FFN=512 — recommended for Hardware One.
     # FFN=512 (2.67×dim) balances factual storage width with 16 layers of routing depth.
-    # Est. PSRAM at ctx=64: ~7688 KB with ~504 KB headroom on 8 MB ESP32-S3.
-    "HW1HelpAgent192_deep": {"vocab_size": 3328, "n_embd": 192, "n_layer": 16, "n_head": 6, "seq_len": 128, "n_inner": 512},
+    # Train at seq_len=128 so Q+A pairs aren't truncated. Firmware auto-caps runtime context to 45
+    # for HardwareOneHelpAgent models (answers never exceed ~40 tokens; saves PSRAM at runtime).
+    "HW1HelpAgent192_deep": {"vocab_size": 3072, "n_embd": 192, "n_layer": 16, "n_head": 6, "seq_len": 128, "n_inner": 512},
     # "HW1HelpAgent256": dim=256 / 8 layers / 8 heads / FFN=768 — wider representation for better topic separation.
     "HW1HelpAgent256": {"vocab_size": 4096, "n_embd": 256, "n_layer": 8, "n_head": 8, "seq_len": 128, "n_inner": 768},
 }
 
-# argparse dest → CLI flag (for “only override if user did not pass this flag”)
+# argparse dest → CLI flag (for "only override if user did not pass this flag")
 _ARG_TO_FLAG = {
     "vocab_size": "--vocab-size",
     "n_embd": "--n-embd",
@@ -141,6 +142,16 @@ def apply_preset(ns: argparse.Namespace) -> None:
         flag = _ARG_TO_FLAG[key]
         if not _argv_provides_flag(flag):
             setattr(ns, key, val)
+
+
+def _eval_strategy_key() -> str:
+    """TrainingArguments renamed evaluation_strategy -> eval_strategy in
+    transformers 4.41. Pick whichever this install accepts so eval works on
+    both old and new (5.x) versions."""
+    import inspect
+    from transformers import TrainingArguments
+    params = inspect.signature(TrainingArguments.__init__).parameters
+    return "eval_strategy" if "eval_strategy" in params else "evaluation_strategy"
 
 
 def parse_args() -> argparse.Namespace:
@@ -189,6 +200,13 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Stop after N optimizer steps (overrides --epochs). Use for smoke runs, e.g. --max-steps 15",
     )
+    p.add_argument("--val-frac", type=float, default=0.0, metavar="F",
+                   help="Hold out fraction F (e.g. 0.1) of blocks for eval + early stopping. "
+                        "0 = no eval (default; behaviour unchanged). When >0, --epochs becomes a "
+                        "ceiling and training stops once eval loss stops improving — so each "
+                        "dataset self-tunes its epoch count instead of inheriting a fixed default.")
+    p.add_argument("--early-stopping-patience", type=int, default=5, metavar="N",
+                   help="With --val-frac>0, stop after N epochs with no eval-loss improvement (default 5).")
     p.add_argument("--batch-size", type=int, default=8)
     p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--max-samples", type=int, default=None, help="Cap training rows (TinyStories)")
@@ -205,83 +223,46 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Trade compute for VRAM (recommended for medium+ on one GPU)",
     )
+    p.add_argument("--special-tokens", type=Path, default=None, metavar="FILE",
+                   help="Optional file of extra tokens (one per line) the BPE tokenizer should keep whole — "
+                        "e.g. domain commands or multi-word terms. Blank lines and # comments are ignored. "
+                        "The infrastructure tokens (Q:, A:, Do:, <pad>, <unk>, <|endoftext|>) are always added.")
     return p.parse_args()
 
 
-def train_bpe_tokenizer(text_paths: list[Path], vocab_size: int, out_dir: Path) -> "GPT2TokenizerFast":
+def load_special_tokens(path: "Path | None") -> list[str]:
+    """Read extra whole-word tokens from a file (one per line; # comments / blanks ignored)."""
+    if not path:
+        return []
+    if not path.is_file():
+        sys.exit(f"--special-tokens file not found: {path}")
+    toks = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            toks.append(line)
+    return toks
+
+
+def train_bpe_tokenizer(text_paths: list[Path], vocab_size: int, out_dir: Path,
+                        extra_special_tokens: "list[str] | None" = None) -> "GPT2TokenizerFast":
     from tokenizers import Tokenizer, models, pre_tokenizers, trainers
     from transformers import GPT2TokenizerFast
 
     tokenizer_core = Tokenizer(models.BPE(unk_token="<unk>"))
     tokenizer_core.pre_tokenizer = pre_tokenizers.ByteLevel(add_prefix_space=False)
+    # Infrastructure tokens are always kept whole. Domain-specific tokens (e.g.
+    # CLI commands or multi-word terms) come from --special-tokens, so the tool
+    # is not tied to any one dataset.
+    infra_tokens = ["<|endoftext|>", "<pad>", "<unk>", "Q:", "A:", "Do:"]
+    seen, all_special = set(), []
+    for t in infra_tokens + list(extra_special_tokens or []):
+        if t not in seen:
+            seen.add(t); all_special.append(t)
     trainer = trainers.BpeTrainer(
         vocab_size=vocab_size,
         min_frequency=2,
-        special_tokens=[
-            # Infrastructure
-            "<|endoftext|>", "<pad>", "<unk>", "Q:", "A:", "Do:",
-            # Sensor open commands — compound words BPE would fragment
-            "opentof", "openimu", "opengps", "openthermal",
-            "openpresence", "openapds", "openfmradio", "opengamepad",
-            "openrtc", "opencamera", "openmic", "openespnow", "opensr",
-            # WiFi commands
-            "openwifi", "closewifi", "wifiadd", "wifiscan", "wifistatus",
-            "wifilist", "wifipromote",
-            # BLE commands
-            "openble", "closeble", "bleinfo", "blestatus",
-            # MQTT commands
-            "openmqtt", "mqttstatus",
-            # ESP-NOW commands
-            "espnowsend", "espnowsendfile", "espnowstats",
-            "espnowpair", "espnowunpair", "espnowdevices",
-            "espnowsetname", "espnowbroadcast", "espnowpairsecure",
-            "espnowlist",
-            # Bond commands
-            "bondconnect", "bonddisconnect", "bondstatus",
-            # User commands
-            "useradd", "userdelete", "userlist",
-            "userchangepassword", "userresetpassword",
-            # Session commands
-            "sessionlist", "sessionrevoke", "pendinglist",
-            # Battery and system
-            "batterystatus", "savesettings", "lightsleep",
-            # OLED commands
-            "oledbrightness", "oledmode", "oledstatus", "oledclear",
-            # LED commands
-            "ledcolor", "ledclear", "ledeffect", "ledbrightness",
-            # File commands
-            "filecreate", "filedelete", "filerename", "fileview",
-            # SD card commands
-            "sdinfo", "sdformat",
-            # Camera commands
-            "cameracapture", "camerasave",
-            # Microphone commands
-            "micrecord", "micdelete",
-            # GPS commands
-            "gpsread",
-            # FM radio commands
-            "fmradiotune", "fmradioseek", "fmradiovolume",
-            "fmradiomute", "fmradiounmute", "fmradioread",
-            # RTC commands
-            "rtcread", "rtcsync",
-            # Presence sensor
-            "presenceread", "presencestatus",
-            # APDS sensor
-            "apdscolor", "apdsproximity", "apdsgesture",
-            # Servo commands
-            "servoprofile", "servocalibrate",
-            # LLM commands
-            "llmload", "llmunload",
-            # Edge Impulse commands
-            "eienable", "eidetect", "eicontinuous", "eiconfidence",
-            # Speech recognition commands
-            "srconfidence", "srautotune", "srcmdslist",
-            # Sensor reads and diagnostics
-            "thermalread", "gamepadread", "sensorinfo", "i2cscan",
-            "memsample", "memreport",
-            # Misc
-            "ntpsync", "automationlist", "automationadd",
-        ],
+        special_tokens=all_special,
     )
     tokenizer_core.train([str(p) for p in text_paths], trainer)
     tok_path = out_dir / "tokenizer.json"
@@ -312,14 +293,12 @@ def run_qa_test(model, tokenizer, label: str) -> None:
                 return False
             return int(input_ids[0, -1].item()) == self.q_token_id
 
+    # Domain-neutral sample prompts. For a meaningful test on your own dataset,
+    # use the GPU trainer's --qa-test-prompts, or edit these to your domain.
     prompts = [
-        "Q: What is WiFi?\nA:",
-        "Q: What is ESP-NOW?\nA:",
-        "Q: What sensors does Hardware One have?\nA:",
-        "Q: What is MQTT?\nA:",
-        "Q: Is ESP-NOW the same as WiFi?\nA:",
-        "Q: How do I update the firmware?\nA:",
+        "Q: What is this?\nA:",
         "Once upon a time",
+        "The cat sat on",
     ]
 
     q_enc = tokenizer.encode("Q:", add_special_tokens=False)
@@ -562,13 +541,22 @@ def main() -> None:
         import torch
         from transformers import (
             DataCollatorForLanguageModeling,
+            EarlyStoppingCallback,
             GPT2Config,
             GPT2LMHeadModel,
             Trainer,
             TrainingArguments,
+            set_seed,
         )
     except ImportError as e:
         sys.exit(f"Missing dependency: {e}\nInstall: pip install torch transformers datasets tokenizers accelerate")
+
+    # Seed every RNG (python / numpy / torch / cuda) from --seed. This MUST run
+    # before the model is constructed: GPT2LMHeadModel(config) draws its weight
+    # initialization from torch's global RNG, so seeding later (e.g. when the
+    # Trainer starts) would leave init non-reproducible. random.seed() above only
+    # covers Python's random module — set_seed() covers torch/cuda as well.
+    set_seed(args.seed)
 
     temp_files: list[Path] = []
     text_paths: list[Path] = []
@@ -587,14 +575,17 @@ def main() -> None:
         ds_raw = hf_train
 
     print("Training BPE tokenizer…")
-    tokenizer = train_bpe_tokenizer(text_paths, args.vocab_size, out_dir)
+    extra_tokens = load_special_tokens(args.special_tokens)
+    if extra_tokens:
+        print(f"  (+{len(extra_tokens)} extra special tokens from {args.special_tokens})")
+    tokenizer = train_bpe_tokenizer(text_paths, args.vocab_size, out_dir, extra_tokens)
 
     # ── Tokenizer debug info ─────────────────────────────────────────────
     print(f"Tokenizer vocab size: {len(tokenizer)}")
     for special in ["Q:", "A:", "<|endoftext|>", "<pad>", "<unk>"]:
         tok_ids = tokenizer.encode(special, add_special_tokens=False)
         print(f"  '{special}' -> token IDs: {tok_ids}  (atomic={len(tok_ids)==1})")
-    sample_qa = "Q: What is WiFi?\nA: WiFi connects to a router."
+    sample_qa = "Q: What is this?\nA: This is a sample answer."
     sample_ids = tokenizer.encode(sample_qa, add_special_tokens=False)
     print(f"  Sample Q&A tokenization ({len(sample_ids)} tokens):")
     for i, tid in enumerate(sample_ids[:30]):
@@ -688,6 +679,11 @@ def main() -> None:
                     continue
                 entry = list(ids[:block_size]) if len(ids) > block_size else list(ids)
                 entry_labels = _build_label_mask(entry)
+                # Train an explicit stop: append one UNMASKED EOS after the
+                # answer so the model learns to halt instead of rambling.
+                if len(entry) < block_size:
+                    entry = entry + [eos_id]
+                    entry_labels = entry_labels + [eos_id]
                 pad_len = block_size - len(entry)
                 blocks.append(entry + [eos_id] * pad_len)
                 labels_list.append(entry_labels + [-100] * pad_len)
@@ -768,8 +764,20 @@ def main() -> None:
 
     use_cuda = torch.cuda.is_available()
 
+    # Optional held-out eval split → early stopping. With --val-frac 0 (default)
+    # there is no split and behaviour is identical to before. With >0, training
+    # runs up to --epochs but halts when eval loss plateaus, so each dataset
+    # stops at its own right point instead of inheriting a fixed epoch count.
+    eval_ds = None
+    train_ds = lm_ds
+    if args.val_frac and args.val_frac > 0:
+        split = lm_ds.train_test_split(test_size=args.val_frac, seed=args.seed)
+        train_ds, eval_ds = split["train"], split["test"]
+        print(f"Eval split: {len(train_ds):,} train / {len(eval_ds):,} eval blocks "
+              f"({args.val_frac:.0%} held out, seed={args.seed})")
+
     # Compute warmup steps: ramp LR from ~0 over the first 6% of training
-    _steps_per_epoch = max(1, len(lm_ds) // args.batch_size)
+    _steps_per_epoch = max(1, len(train_ds) // args.batch_size)
     _total_steps = int(_steps_per_epoch * args.epochs // args.grad_accum)
     _warmup_steps = max(1, int(_total_steps * 0.06))
 
@@ -779,6 +787,8 @@ def main() -> None:
         per_device_train_batch_size=args.batch_size,
         gradient_accumulation_steps=args.grad_accum,
         learning_rate=args.lr,
+        seed=args.seed,                            # Trainer re-seeds at train start; keep it == --seed
+        data_seed=args.seed,                       # makes the data sampler / shuffle order reproducible
         lr_scheduler_type="cosine",                 # smooth ease-in/ease-out LR curve
         warmup_steps=_warmup_steps,                # ramp LR from ~0 over first 6% of steps
         weight_decay=0.01,                         # L2 regularization
@@ -792,17 +802,35 @@ def main() -> None:
     )
     if args.max_steps is not None and args.max_steps > 0:
         ta_kw["max_steps"] = args.max_steps
+
+    if eval_ds is not None:
+        # Evaluate + checkpoint each epoch and keep the best model by eval loss,
+        # so EarlyStoppingCallback can roll back to the best checkpoint on stop.
+        ta_kw[_eval_strategy_key()] = "epoch"
+        ta_kw["save_strategy"] = "epoch"
+        ta_kw["save_steps"] = None                 # ignored under epoch strategy
+        ta_kw["save_total_limit"] = max(2, ta_kw.get("save_total_limit", 2))
+        ta_kw["load_best_model_at_end"] = True
+        ta_kw["metric_for_best_model"] = "eval_loss"
+        ta_kw["greater_is_better"] = False
+
     training_args = TrainingArguments(**ta_kw)
 
     n_params = sum(p.numel() for p in model.parameters())
-    print(f"Model: {n_params:,} parameters  |  batch={args.batch_size}  |  epochs={args.epochs}")
-    print(f"Dataset: {len(lm_ds):,} blocks of {args.seq_len} tokens")
-    print(f"Params-to-blocks ratio: {n_params / max(1, len(lm_ds)):.0f}:1")
+    print(f"Model: {n_params:,} parameters  |  batch={args.batch_size}  |  epochs={args.epochs}"
+          f"{' (ceiling; early stopping on)' if eval_ds is not None else ''}")
+    print(f"Dataset: {len(train_ds):,} blocks of {args.seq_len} tokens")
+    print(f"Params-to-blocks ratio: {n_params / max(1, len(train_ds)):.0f}:1")
+    callbacks = []
+    if eval_ds is not None:
+        callbacks.append(EarlyStoppingCallback(early_stopping_patience=args.early_stopping_patience))
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=lm_ds,
+        train_dataset=train_ds,
+        eval_dataset=eval_ds,
         data_collator=collator,
+        callbacks=callbacks or None,
     )
 
     print("Training…")
@@ -822,6 +850,12 @@ def main() -> None:
         print(f"  Loss: first={first_loss:.4f}  last={last_loss:.4f}  min={min_loss:.4f}  steps={losses[-1][0]}")
         if last_loss > first_loss * 0.95:
             print("  WARNING: Loss barely decreased — model may not have learned.")
+
+    eval_losses = [(e["step"], e["eval_loss"]) for e in log_history if "eval_loss" in e]
+    if eval_losses:
+        best_eval = min(l for _, l in eval_losses)
+        print(f"  Eval loss: first={eval_losses[0][1]:.4f}  last={eval_losses[-1][1]:.4f}  "
+              f"best={best_eval:.4f}  (best checkpoint restored if --val-frac was set)")
 
     model.eval()
     print("  Key weight stats:")

@@ -1,6 +1,11 @@
 ESP32-S3 On-Device LLM — Training & Converter Package
 =======================================================
 
+This tool trains a tiny GPT-2-style language model on your PC and converts it to
+a model.bin that runs on the ESP32-S3 (8 MB PSRAM). The model is DOMAIN-AGNOSTIC:
+you supply the knowledge by providing your own training corpus. HardwareOne and
+"Kanto Pokemon Master" are just example datasets.
+
 
 STEP 1 — Install dependencies (once)
 --------------------------------------
@@ -15,68 +20,97 @@ On GPU machines, install PyTorch for your CUDA version first:
 Verify GPU (optional):  python -c "import torch; print(torch.cuda.is_available())"
 
 
-STEP 2 — Train the model
+STEP 2 — Prepare your training data
+-------------------------------------
+
+Your corpus is a plain .txt file of blocks separated by blank lines. See
+training_data/template.txt for the format. Three block types:
+
+    Q: <question>            Q: <question>           <a prose paragraph of
+    A: <short answer>        Do: <command>            background context>
+
+Tips:
+  - Keep answers short (~<30 words) so a full Q&A pair fits the context window.
+  - Reinforce each fact with several phrasings of the question -> same answer.
+  - Use Q:/Do: only if your agent suggests named commands; otherwise skip it.
+  - If your domain has multi-word terms or commands that must tokenize as one
+    unit, list them one-per-line in a file and pass --special-tokens that_file.
+
+Example datasets shipped with this tool:
+  - training_data/hardwareone_rich.txt        (firmware help agent; uses
+        --special-tokens training_data/hardwareone_special_tokens.txt)
+  - training_data/pokemon_kanto.txt           (Gen-1 Kanto Pokedex; uses
+        --special-tokens training_data/pokemon_special_tokens.txt to keep the
+        151 names whole)
+  - training_data/elements_rich.txt           (periodic table, 118 elements;
+        uses --special-tokens training_data/elements_special_tokens.txt)
+
+
+STEP 3 — Train the model
 --------------------------
 
-Use HW1HelpAgent192_deep for best quality: 16 layers, dim=192, 6 heads, FFN=512, seq=128.
-Or use HW1HelpAgent for the proven narrow model: 22 layers, dim=128, 4 heads, FFN=768.
+Use HW1HelpAgent192_deep for best quality: 16 layers, dim=192, 6 heads, FFN=512,
+seq=128. (The preset names are historical labels; they work for any domain.)
 
 GPU training (recommended):
 
     python train_tiny_model_gpu.py \
         --preset HW1HelpAgent192_deep \
-        --text training_data/hardwareone_rich.txt \
+        --text training_data/YOUR_DATA.txt \
+        --qa-test-prompts training_data/YOUR_TEST_PROMPTS.txt \
         --epochs 250 --lr 3e-4 --batch-size 16 \
-        --out ./out_HW1HelpAgent192_deep
+        --out ./out_mymodel
 
 CPU training (slow, use only if no GPU available):
 
     python train_tiny_model.py \
         --preset HW1HelpAgent192_deep \
-        --text training_data/hardwareone_rich.txt \
+        --text training_data/YOUR_DATA.txt \
         --epochs 400 --batch-size 8 --lr 3e-4 \
-        --out ./out_HW1HelpAgent192_deep
+        --out ./out_mymodel
 
-Loss should fall from ~7 down to ~0.1-0.3.
-The script runs a Q&A test after training completes.
+Add  --special-tokens <file>  if your domain needs whole-word tokens (see STEP 2).
+
+Loss should fall from ~7 down to ~0.1-0.3. After training, the script runs a
+generation test. Pass --qa-test-prompts (a file of "Q: ..." lines) so the test
+asks questions from YOUR domain; otherwise it uses a generic placeholder.
 
 To check model size before training:
 
     python train_tiny_model_gpu.py --preset HW1HelpAgent --estimate-only
 
 
-STEP 3 — Convert to model.bin (browser tool)
+STEP 4 — Convert to model.bin (browser tool)
 ---------------------------------------------
 
-3a. Open index.html in Chrome or Edge (Firefox works too).
+4a. Open index.html in Chrome or Edge (Firefox works too).
     No server needed — open the file directly from disk.
 
-3b. Drop the entire output folder (./out_HW1HelpAgent) onto the page, or use
+4b. Drop the entire output folder (./out_mymodel) onto the page, or use
     the file picker to select the files inside it.
 
-3c. Select INT8 quantization, group size 128. These are the defaults.
+4c. Select INT8 quantization, group size 128. These are the defaults.
 
-3d. Click Convert. When finished, click Download.
-    This saves model.bin.
+4d. Click Convert. When finished, click Download. This saves model.bin.
 
 
-STEP 4 — Copy to device
+STEP 5 — Copy to device
 -------------------------
 
-4a. Copy model.bin to the SD card at /sd/llm/ or upload via the web Files page.
+5a. Copy model.bin to the SD card at /sd/llm/ or upload via the web Files page.
 
-4b. Open the LLM tab in the web dashboard, select the model, and click Load.
+5b. Open the LLM tab in the web dashboard, select the model, and click Load.
     Or from the CLI: llm load /sd/llm/model.bin
 
-4c. Expected log output: [LLM] Model ready. PSRAM used: ~6900KB
+5c. Expected log output: [LLM] Model ready. PSRAM used: ~6900KB
 
 
-STEP 5 — Use the LLM
+STEP 6 — Use the LLM
 ----------------------
 
 Ask questions from the LLM tab in the web dashboard or from the CLI:
 
-    llm generate "What is Hardware One?"
+    llm generate "your question here"
 
 The firmware stops generation after 2 sentences or 80 tokens (configurable).
 
@@ -85,29 +119,24 @@ TRAINING DATA FILES
 --------------------
 
     training_data/
-        hardwareone_rich.txt              Complete training corpus (Q&A pairs,
-                                          passages, and Do: command pairs).
-                                          Edit this file directly to change
-                                          training data.
+        template.txt                      Copy this and fill in your own data.
+        hardwareone_rich.txt              Example: firmware help corpus.
+        hardwareone_special_tokens.txt    Whole-word command tokens for the
+                                          HardwareOne example (--special-tokens).
+        pokemon_kanto.txt                 Example: Gen-1 Kanto Pokedex corpus.
+        pokemon_special_tokens.txt        The 151 names, kept whole (--special-tokens).
+        elements_rich.txt                 Example: periodic table (118 elements).
+        elements_special_tokens.txt       Element names + symbols (--special-tokens).
 
     training_scripts/
         run_all_checks.py                 Run all data quality checks at once
         deep_error_analysis.py            12-check structural and content analysis
         validate_training_data.py         Format and command validation
-        shuffle_training_data.py          Randomize training block order
-        check_hallucinated_sensors.py     Flag invalid chip names
-        check_answer_consistency.py       Verify facts match across answers
-        answer_frequency_balance.py       Report answer repetition balance
-        find_near_duplicate_answers.py    Find 75%+ word-overlap answer pairs
-        answer_fluff_analysis.py          Report verbose phrases and word budget
         topic_coverage_report.py          Count QA pairs per topic
-        prose_analysis.py                 Check prose lengths and topic coverage
-
-All Q&A pairs use Q:/A: format. Answers are 30 words or less to fit within
-the model's context window.
+        ... (plus dataset-specific generators/verifiers)
 
 Note: The GPU trainer masks question tokens during training (only answer tokens
-contribute to the loss). This focuses 100% of learning on answer quality.
+contribute to the loss). This focuses learning on answer quality.
 
 
 PRESET REFERENCE
@@ -115,15 +144,15 @@ PRESET REFERENCE
 
 Name                Vocab  Layers  dim  FFN   seq   Est. INT8 PSRAM
 ------------------  -----  ------  ---  ----  ----  ---------------
-HW1HelpAgent192_deep 3.3K  16      192  512   128   ~7.5 MB  <- recommended
+HW1HelpAgent192_deep 3K    16      192  512   128   ~7.5 MB  <- recommended
 HW1HelpAgent        4K     22      128  768   128   ~7.5 MB
 HW1HelpAgent192     4K     12      192  768   128   ~7.6 MB
 HW1HelpAgent256     4K      8      256  768   128   ~7.8 MB
 narrow3              4K     18      128  768   128   ~6.9 MB
-narrow3_short        4K     18      128  768    64   ~6.5 MB
+narrow3_short       4K     18      128  768    64   ~6.5 MB
 narrow2              4K     20      128  640   128   ~6.9 MB
 narrow               4K      8      256  512   128   ~7.3 MB
 stretch2             8K     20      128  640   128   ~8.1 MB  (tight, may OOM)
 stretch              8K     18      128  512   128   ~7.4 MB
 leaner               8K     15      128  512   128   ~6.0 MB
-baseline             16K    12      128  512   128   ~6.4 MB
+baseline            16K     12      128  512   128   ~6.4 MB
