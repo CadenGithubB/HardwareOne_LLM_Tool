@@ -10,7 +10,7 @@ Part of the [Hardware One](https://github.com/CadenGithubB/HardwareOne) ecosyste
 
 HardwareOne LLM Tool trains ultra-compact GPT-2 style language models on a PC and converts them to run entirely on the ESP32-S3 microcontroller using only 8MB of PSRAM. No cloud, no internet required at runtime — the model runs locally on the device.
 
-**The trainer is domain-agnostic — you bring your own training corpus.** The same toolchain can produce a firmware help agent, a Pokédex, or any other tiny knowledge model. HardwareOne is the reference example; see [`Training Materials/`](Training%20Materials/) for ready-to-use example packages (HardwareOne Help Agent, Kanto Pokemon Master).
+**The trainer is domain-agnostic — you bring your own training data.** The same toolchain can produce a firmware help agent, a Pokédex, or any other tiny knowledge model. HardwareOne is the reference example; see [`Training Material + Pre-trained Models/`](Training%20Material%20%2B%20Pre-trained%20Models/) for ready-to-use training packages and deployable models.
 
 **Training happens on your PC. The model runs on the ESP32. Nothing is trained on the device.**
 
@@ -27,7 +27,27 @@ HardwareOne LLM Tool trains ultra-compact GPT-2 style language models on a PC an
 
 ## Quick Start
 
-### 1. Install Dependencies
+You have three paths — pick one:
+
+| Path | When to use |
+|------|-------------|
+| **A. Pre-trained model** | Fastest — grab a ready `model.bin` and deploy |
+| **B. Your own dataset** | Custom domain — write your data, train with `training/` |
+| **C. Example package** | Reproduce or tweak a shipped model — unzip a training package and train |
+
+See `training/INSTRUCTIONS.txt` for the full walkthrough. Summary below.
+
+### Path A — Deploy a pre-trained model
+
+1. Download a `.bin` from [`Trained + Ready Models/`](Training%20Material%20%2B%20Pre-trained%20Models/Trained%20%2B%20Ready%20Models/) (e.g. `HardwareOneHelpAgent.bin`)
+2. Copy it to `/sd/llm/` on the SD card (or upload via the web Files page)
+3. Load from the LLM tab or CLI: `llm load /sd/llm/HardwareOneHelpAgent.bin`
+
+No training or conversion needed.
+
+### Path B — Train on your own dataset
+
+#### 1. Install dependencies
 
 ```bash
 cd training
@@ -43,26 +63,32 @@ pip install torch --index-url https://download.pytorch.org/whl/cu121
 pip install torch --index-url https://download.pytorch.org/whl/cu124
 ```
 
-### 2. Prepare your data
+#### 2. Create your data
 
-Your corpus is a `.txt` of blocks separated by blank lines — `Q:`/`A:` pairs,
-optional `Q:`/`Do:` command pairs, and prose passages. Copy
-[`training_data/template.txt`](training/training_data/template.txt) and fill in
-your own facts. If your domain has multi-word terms or commands that must stay
-whole in the tokenizer, list them in a file and pass `--special-tokens`.
+Write a plain `.txt` file of blocks separated by blank lines:
 
-### 3. Train Your Model
+- `Q:` / `A:` pairs (short answers, ~30 words or less)
+- optional `Q:` / `Do:` command pairs (if your agent suggests CLI commands)
+- prose paragraphs (background context)
+
+Reinforce each fact with several question phrasings. If your domain has multi-word
+terms that must tokenize as one unit, list them one-per-line in a separate file and
+pass `--special-tokens that_file.txt`.
+
+Each [training package](Training%20Material%20%2B%20Pre-trained%20Models/Training%20Materials/) zip includes a `training_data/template.txt` you can copy as a starting point.
+
+#### 3. Train
 
 ```bash
 cd training
 
 python train_tiny_model_gpu.py \
     --preset HW1HelpAgent192_deep \
-    --text training_data/YOUR_DATA.txt \
-    --qa-test-prompts training_data/YOUR_TEST_PROMPTS.txt \
+    --text /path/to/YOUR_DATA.txt \
+    --qa-test-prompts /path/to/YOUR_TEST_PROMPTS.txt \
     --epochs 250 --lr 3e-4 --batch-size 16 \
     --out ./out_mymodel
-    # add: --special-tokens training_data/YOUR_TOKENS.txt   (optional)
+    # add: --special-tokens /path/to/YOUR_TOKENS.txt   (optional)
 ```
 
 CPU training (slower, use if no GPU):
@@ -70,25 +96,32 @@ CPU training (slower, use if no GPU):
 ```bash
 python train_tiny_model.py \
     --preset HW1HelpAgent192_deep \
-    --text training_data/YOUR_DATA.txt \
+    --text /path/to/YOUR_DATA.txt \
     --epochs 400 --batch-size 8 --lr 3e-4 \
     --out ./out_mymodel
 ```
 
-Training takes ~30-60 minutes on a modern GPU. CPU training works but is much slower (many hours).
+Training takes ~30–60 minutes on a modern GPU. CPU training works but is much slower (many hours).
 
-See `training/INSTRUCTIONS.txt` for full details including all presets and the converter workflow.
-
-### 4. Convert to ESP32 Format
+#### 4. Convert to ESP32 format
 
 1. Open `index.html` in Chrome/Edge/Firefox
-2. Drag the output folder (`./out_HW1HelpAgent192_deep`) onto the page
+2. Drag the output folder (`./out_mymodel`) onto the page
 3. Select **INT8 quantization**, group size **128**
 4. Click **Convert**, then **Download** — saves `model.bin`
 
-### 5. Deploy to Hardware One
+#### 5. Deploy
 
 Copy `model.bin` to `/sd/llm/` on the SD card or upload via the web Files page. Load it from the LLM tab or CLI.
+
+### Path C — Train from an example package
+
+1. Pick a package from [`Training Materials/`](Training%20Material%20%2B%20Pre-trained%20Models/Training%20Materials/) (HardwareOne Help Agent, Kanto Pokemon Master, Periodic Table Guide)
+2. Unzip it anywhere, e.g. `unzip hardwareone_training_package.zip -d my_model && cd my_model`
+3. The zip is self-contained — it includes trainers, `training_data/`, validation scripts, and `INSTRUCTIONS.txt`
+4. `pip install -r requirements.txt` (add a CUDA build of torch for GPU training)
+5. Train using the command in that package's `INSTRUCTIONS.txt` or the [catalog README](Training%20Material%20%2B%20Pre-trained%20Models/Training%20Materials/README.md)
+6. Convert with `index.html` (repo root) and deploy as in Path B
 
 ---
 
@@ -97,14 +130,18 @@ Copy `model.bin` to `/sd/llm/` on the SD card or upload via the web Files page. 
 ### Training (`training/`)
 - `train_tiny_model_gpu.py` — GPU training script (recommended)
 - `train_tiny_model.py` — CPU training script
-- `training_data/template.txt` — **Start here** — blank template showing the data format
-- `training_data/hardwareone_rich.txt` — Example corpus: firmware help agent
-- `training_data/hardwareone_special_tokens.txt` — Whole-word command tokens for the HardwareOne example (`--special-tokens`)
-- `training_data/pokemon_kanto.txt` — Example corpus: Gen-1 Kanto Pokédex
 - `INSTRUCTIONS.txt` — Detailed training guide and preset reference
 - `requirements.txt` — Python dependencies
+- `training_scripts/` — Data validation and analysis tools (run against your own data)
 
-> 📦 Ready-to-use training packages for each example model live in [`Training Materials/`](Training%20Materials/).
+This folder ships **trainers and tools only** — no example data. Bring your own
+`.txt` dataset (Path B) or unzip a [training package](Training%20Material%20%2B%20Pre-trained%20Models/Training%20Materials/) (Path C).
+
+### Example Models (`Training Material + Pre-trained Models/`)
+- [`Training Materials/`](Training%20Material%20%2B%20Pre-trained%20Models/Training%20Materials/) — Self-contained training packages (data + scripts + instructions) to reproduce each model
+- [`Trained + Ready Models/`](Training%20Material%20%2B%20Pre-trained%20Models/Trained%20%2B%20Ready%20Models/) — Pre-trained, ready-to-deploy `model.bin` files
+
+See the [catalog README](Training%20Material%20%2B%20Pre-trained%20Models/Training%20Materials/README.md) for per-model train commands and package downloads.
 
 ### Training Scripts (`training/training_scripts/`)
 - `run_all_checks.py` — Run all data quality checks at once
@@ -122,12 +159,9 @@ Copy `model.bin` to `/sd/llm/` on the SD card or upload via the web Files page. 
 - `index.html` — Browser-based INT8 quantization converter
 - `tokenizer.js` — Tokenizer used by the converter
 
-### Technical Docs (`technical_docs/`)
-- [`architecture_comparison.html`](https://cadengithubb.github.io/HardwareOne_LLM_Tool/technical_docs/architecture_comparison.html) — Visual comparison of model architectures
-- [`transformer_deep_dive.html`](https://cadengithubb.github.io/HardwareOne_LLM_Tool/technical_docs/transformer_deep_dive.html) — Detailed transformer internals reference
-
-### Download
-- `training/hardwareone_training_package.zip` — Everything in `training/` bundled for easy download
+### Technical Docs (`training/technical_docs/`)
+- [`architecture_comparison.html`](https://cadengithubb.github.io/HardwareOne_LLM_Tool/training/technical_docs/architecture_comparison.html) — Visual comparison of model architectures
+- [`transformer_deep_dive.html`](https://cadengithubb.github.io/HardwareOne_LLM_Tool/training/technical_docs/transformer_deep_dive.html) — Detailed transformer internals reference
 
 ---
 
@@ -213,8 +247,8 @@ MIT License — See LICENSE file for details.
 
 | | |
 |---|---|
-| 📐 **[Architecture Comparison](https://cadengithubb.github.io/HardwareOne_LLM_Tool/technical_docs/architecture_comparison.html)** | Visual breakdown of model size and shape tradeoffs |
-| 🧠 **[Transformer Deep Dive](https://cadengithubb.github.io/HardwareOne_LLM_Tool/technical_docs/transformer_deep_dive.html)** | How prompts move through the model — heads, attention, FFN, KV cache |
+| 📐 **[Architecture Comparison](https://cadengithubb.github.io/HardwareOne_LLM_Tool/training/technical_docs/architecture_comparison.html)** | Visual breakdown of model size and shape tradeoffs |
+| 🧠 **[Transformer Deep Dive](https://cadengithubb.github.io/HardwareOne_LLM_Tool/training/technical_docs/transformer_deep_dive.html)** | How prompts move through the model — heads, attention, FFN, KV cache |
 | 💾 **[Hardware One Firmware](https://github.com/CadenGithubB/HardwareOne)** | The ESP32-S3 platform this model runs on |
 
 ---

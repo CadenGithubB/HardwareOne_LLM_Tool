@@ -1,25 +1,34 @@
 # Training Materials Catalog
 
 A catalog of **training packages** for the on-device LLM models built with this
-tool. Each package is a self-contained zip with the corpus, trainers, validation
+tool. Each package is a self-contained zip with the training data, trainers, validation
 scripts, and instructions needed to reproduce a model from scratch.
+
+> **The main repo `training/` folder does not ship example data.** Either
+> write your own dataset and train with the repo trainers (see
+> [`training/INSTRUCTIONS.txt`](../../training/INSTRUCTIONS.txt)), grab a
+> pre-trained `.bin` from [`../Trained + Ready Models/`](../Trained%20+%20Ready%20Models/),
+> or unzip one of the packages below and train from inside the unzip directory.
 
 > Trained, ready-to-deploy `model.bin` files live in [`../Trained + Ready Models/`](../Trained%20+%20Ready%20Models/).
 > This folder holds the **source materials** that produce them.
 
 ## How to use a package
 
-1. Unzip it, e.g. `unzip <package>.zip -d my_model && cd my_model`
+1. Unzip it anywhere — the zip is fully self-contained (trainers + `training_data/` + scripts):
+   `unzip <package>.zip -d my_model && cd my_model`
 2. `pip install -r requirements.txt` (add a CUDA build of torch for GPU training)
 3. Train with the command in that package's `INSTRUCTIONS.txt` / the notes below
-4. Convert the output folder to `model.bin` via the browser tool (`index.html`,
-   INT8, group size 128)
+4. Convert the output folder to `model.bin` via the browser tool (`index.html` at
+   the repo root, INT8, group size 128)
+5. Copy `model.bin` to the device, or compare against a pre-trained `.bin` in
+   `../Trained + Ready Models/` if one exists for that model
 
 ---
 
 ## Catalog
 
-| Model | Domain | Preset | Corpus | Trained `.bin` | Package |
+| Model | Domain | Preset | Training data | Trained `.bin` | Package |
 |---|---|---|---|---|---|
 | **HardwareOne Help Agent** | HardwareOne ESP32-S3 firmware help (Q&A + `Do:` CLI command suggestions) | HW1HelpAgent192_deep (~7.5 MB INT8) | ~890 Q&A + 1,123 `Do:` pairs, 27 topics | [`HardwareOneHelpAgent.bin`](../Trained%20+%20Ready%20Models/HardwareOneHelpAgent.bin) (6.5 MB) | [`hardwareone-help-agent/`](hardwareone-help-agent/hardwareone_training_package.zip) |
 | **Kanto Pokemon Master** | Generation-1 / Kanto knowledge: the original 151 Pokémon + the Kanto region (pure knowledge Q&A) | HW1HelpAgent192_deep (~7.5 MB INT8) | 3,998 Q&A + 9 prose | _not yet trained_ | [`kanto-pokemon-master/`](kanto-pokemon-master/kanto_pokemon_master_training_package.zip) |
@@ -31,7 +40,7 @@ scripts, and instructions needed to reproduce a model from scratch.
 
 ### HardwareOne Help Agent
 The original shipped model. Answers questions about the HardwareOne firmware and
-suggests CLI commands via `Do:` pairs. Corpus is hand-curated in
+suggests CLI commands via `Do:` pairs. Data is hand-curated in
 `training_data/hardwareone_rich.txt`; the package includes the full suite of data
 quality validators.
 
@@ -46,7 +55,7 @@ python train_tiny_model_gpu.py \
 ```
 
 ### Kanto Pokemon Master
-A knowledge agent for the original 151 Pokémon and the Kanto region. The corpus is
+A knowledge agent for the original 151 Pokémon and the Kanto region. The data is
 **generated** from a single fact table (`training_scripts/generate_pokemon_data.py`)
 so facts never contradict across phrasings. Covers, per Pokémon: type, Pokédex
 number, category, evolution (method + level/stone/trade + item interactions), and
@@ -109,7 +118,7 @@ When converted, name the deployable model `PeriodicTableGuide.bin` in
 
 ## Adding a new model to the catalog
 
-1. Build the training package zip (corpus + trainers + scripts + INSTRUCTIONS).
+1. Build the training package zip (data + trainers + scripts + INSTRUCTIONS).
 2. Create a `kebab-case/` subfolder here and drop the zip inside.
 3. Add a row to the **Catalog** table and a short **Model notes** section above.
 4. When the `.bin` is trained, place it in `../Trained + Ready Models/` and link it.

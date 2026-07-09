@@ -3,12 +3,32 @@ ESP32-S3 On-Device LLM — Training & Converter Package
 
 This tool trains a tiny GPT-2-style language model on your PC and converts it to
 a model.bin that runs on the ESP32-S3 (8 MB PSRAM). The model is DOMAIN-AGNOSTIC:
-you supply the knowledge by providing your own training corpus. HardwareOne and
-"Kanto Pokemon Master" are just example datasets.
+you supply the knowledge. The training/ folder in this repo ships trainers and
+validation tools — not example data.
+
+THREE WAYS TO GET A MODEL
+--------------------------
+
+  A) Pre-trained model (fastest)
+     Download a ready .bin from:
+       Training Material + Pre-trained Models/Trained + Ready Models/
+     Copy to /sd/llm/ on the device. No training step.
+
+  B) Your own dataset
+     Write a data .txt file, train with the scripts in this training/ folder.
+
+  C) Example training package
+     Unzip a package from:
+       Training Material + Pre-trained Models/Training Materials/
+     Each zip is self-contained (trainers + training_data/ + scripts + instructions).
+     Unzip anywhere, cd into it, and train from there.
 
 
 STEP 1 — Install dependencies (once)
 --------------------------------------
+
+For Path B, run from this training/ folder. For Path C, run from inside the
+unzipped package (it includes its own copy of requirements.txt).
 
     pip install -r requirements.txt
 
@@ -20,56 +40,70 @@ On GPU machines, install PyTorch for your CUDA version first:
 Verify GPU (optional):  python -c "import torch; print(torch.cuda.is_available())"
 
 
-STEP 2 — Prepare your training data
--------------------------------------
+STEP 2 — Get your training data (Path B or C)
+-----------------------------------------------
 
-Your corpus is a plain .txt file of blocks separated by blank lines. See
-training_data/template.txt for the format. Three block types:
+PATH B — Roll your own data
+  Write a plain .txt file of blocks separated by blank lines. Three block types:
 
-    Q: <question>            Q: <question>           <a prose paragraph of
-    A: <short answer>        Do: <command>            background context>
+      Q: <question>            Q: <question>           <a prose paragraph of
+      A: <short answer>        Do: <command>            background context>
 
-Tips:
-  - Keep answers short (~<30 words) so a full Q&A pair fits the context window.
-  - Reinforce each fact with several phrasings of the question -> same answer.
-  - Use Q:/Do: only if your agent suggests named commands; otherwise skip it.
-  - If your domain has multi-word terms or commands that must tokenize as one
-    unit, list them one-per-line in a file and pass --special-tokens that_file.
+  Tips:
+    - Keep answers short (~<30 words) so a full Q&A pair fits the context window.
+    - Reinforce each fact with several phrasings of the question -> same answer.
+    - Use Q:/Do: only if your agent suggests named commands; otherwise skip it.
+    - If your domain has multi-word terms or commands that must tokenize as one
+      unit, list them one-per-line in a file and pass --special-tokens that_file.
 
-Example datasets shipped with this tool:
-  - training_data/hardwareone_rich.txt        (firmware help agent; uses
-        --special-tokens training_data/hardwareone_special_tokens.txt)
-  - training_data/pokemon_kanto.txt           (Gen-1 Kanto Pokedex; uses
-        --special-tokens training_data/pokemon_special_tokens.txt to keep the
-        151 names whole)
-  - training_data/elements_rich.txt           (periodic table, 118 elements;
-        uses --special-tokens training_data/elements_special_tokens.txt)
+  Need a format reference? Each training package zip includes training_data/
+  template.txt — unzip any package and copy that file as a starting point.
+
+PATH C — Use a shipped example package
+  1. Pick a zip from Training Material + Pre-trained Models/Training Materials/
+     (HardwareOne Help Agent, Kanto Pokemon Master, or Periodic Table Guide).
+  2. Unzip it, e.g.:
+         unzip hardwareone_training_package.zip -d my_model && cd my_model
+  3. The package already contains training_data/, trainers, and validation scripts.
+     Follow the train commands in that package's INSTRUCTIONS.txt or the catalog
+     README at Training Material + Pre-trained Models/Training Materials/README.md.
+
+PATH A — Skip this step entirely if you only want a pre-trained .bin.
 
 
-STEP 3 — Train the model
---------------------------
+STEP 3 — Train the model (Path B or C)
+----------------------------------------
 
 Use HW1HelpAgent192_deep for best quality: 16 layers, dim=192, 6 heads, FFN=512,
 seq=128. (The preset names are historical labels; they work for any domain.)
 
-GPU training (recommended):
+PATH B example (your own files, run from training/):
 
     python train_tiny_model_gpu.py \
         --preset HW1HelpAgent192_deep \
-        --text training_data/YOUR_DATA.txt \
-        --qa-test-prompts training_data/YOUR_TEST_PROMPTS.txt \
+        --text /path/to/YOUR_DATA.txt \
+        --qa-test-prompts /path/to/YOUR_TEST_PROMPTS.txt \
         --epochs 250 --lr 3e-4 --batch-size 16 \
         --out ./out_mymodel
+
+PATH C example (unzipped HardwareOne package, run from inside the unzip dir):
+
+    python train_tiny_model_gpu.py \
+        --preset HW1HelpAgent192_deep \
+        --text training_data/hardwareone_rich.txt \
+        --special-tokens training_data/hardwareone_special_tokens.txt \
+        --epochs 250 --lr 3e-4 --batch-size 16 \
+        --out ./out_HW1HelpAgent192_deep
 
 CPU training (slow, use only if no GPU available):
 
     python train_tiny_model.py \
         --preset HW1HelpAgent192_deep \
-        --text training_data/YOUR_DATA.txt \
+        --text <your-data.txt> \
         --epochs 400 --batch-size 8 --lr 3e-4 \
         --out ./out_mymodel
 
-Add  --special-tokens <file>  if your domain needs whole-word tokens (see STEP 2).
+Add  --special-tokens <file>  if your domain needs whole-word tokens.
 
 Loss should fall from ~7 down to ~0.1-0.3. After training, the script runs a
 generation test. Pass --qa-test-prompts (a file of "Q: ..." lines) so the test
@@ -84,7 +118,7 @@ STEP 4 — Convert to model.bin (browser tool)
 ---------------------------------------------
 
 4a. Open index.html in Chrome or Edge (Firefox works too).
-    No server needed — open the file directly from disk.
+    No server needed — open the file directly from disk (repo root).
 
 4b. Drop the entire output folder (./out_mymodel) onto the page, or use
     the file picker to select the files inside it.
@@ -115,25 +149,29 @@ Ask questions from the LLM tab in the web dashboard or from the CLI:
 The firmware stops generation after 2 sentences or 80 tokens (configurable).
 
 
-TRAINING DATA FILES
---------------------
+WHAT LIVES WHERE
+-----------------
 
-    training_data/
-        template.txt                      Copy this and fill in your own data.
-        hardwareone_rich.txt              Example: firmware help corpus.
-        hardwareone_special_tokens.txt    Whole-word command tokens for the
-                                          HardwareOne example (--special-tokens).
-        pokemon_kanto.txt                 Example: Gen-1 Kanto Pokedex corpus.
-        pokemon_special_tokens.txt        The 151 names, kept whole (--special-tokens).
-        elements_rich.txt                 Example: periodic table (118 elements).
-        elements_special_tokens.txt       Element names + symbols (--special-tokens).
+  training/  (this repo)
+      Trainers, requirements, and validation scripts. No example data.
+      Use Path B: point --text at your own .txt file.
 
-    training_scripts/
-        run_all_checks.py                 Run all data quality checks at once
-        deep_error_analysis.py            12-check structural and content analysis
-        validate_training_data.py         Format and command validation
-        topic_coverage_report.py          Count QA pairs per topic
-        ... (plus dataset-specific generators/verifiers)
+  Training Material + Pre-trained Models/Training Materials/
+      Self-contained .zip packages (Path C). Each unzip dir has:
+          training_data/     data files + template.txt + special-tokens files
+          train_tiny_model*.py
+          training_scripts/  validators and analysis tools
+          INSTRUCTIONS.txt
+
+  Training Material + Pre-trained Models/Trained + Ready Models/
+      Pre-trained model.bin files (Path A). Copy straight to the device.
+
+  training_scripts/  (in this repo)
+      run_all_checks.py                 Run all data quality checks at once
+      deep_error_analysis.py            12-check structural and content analysis
+      validate_training_data.py         Format and command validation
+      topic_coverage_report.py          Count QA pairs per topic
+      ... (plus other analysis tools)
 
 Note: The GPU trainer masks question tokens during training (only answer tokens
 contribute to the loss). This focuses learning on answer quality.
