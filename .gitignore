@@ -6,3 +6,6 @@ __pycache__/
 *.pyc
 tiny_smoke_out/
 trainer_ckpt/
+# Trained model output folders + their zips (regenerate by training)
+/out_*/
+/out_*.zip
