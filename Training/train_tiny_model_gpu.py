@@ -29,13 +29,18 @@ USAGE:
   # Parameter count / PSRAM estimate only (no training):
   python train_tiny_model_gpu.py --preset HW1HelpAgent192_deep --estimate-only
 
-  # Fine-tune from existing weights with new data:
+  # Fine-tune with MORE DATA FOR THE SAME DOMAIN (adds to an existing model).
+  # WARNING: --finetune-from keeps the source model's weights AND tokenizer, so
+  # the new model INHERITS everything the source knew. NEVER use it to switch
+  # topics — a Pokedex fine-tuned from the HardwareOne agent will still talk
+  # about HardwareOne. For a NEW domain, train FRESH (omit --finetune-from) so a
+  # new tokenizer and new weights are built from scratch on your data.
   python train_tiny_model_gpu.py \\
       --preset HW1HelpAgent192_deep \\
       --finetune-from ./out_HW1HelpAgent192_deep \\
-      --text training_data/hardwareone_rich.txt \\
+      --text training_data/hardwareone_more_qa.txt   `# same domain — more HardwareOne Q&A` \\
       --epochs 50 --lr 1e-4 --batch-size 16 \\
-      --out ./out_finetuned
+      --out ./out_HW1HelpAgent192_deep_v2
 
 ──────────────────────────────────────────────────────────────────────────────
 AFTER TRAINING:
@@ -235,11 +240,16 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--resume",        type=Path, default=None, metavar="CKPT_DIR",
                    help="Resume training from a checkpoint directory (e.g. ./out_stretch/trainer_ckpt/checkpoint-5000)")
     p.add_argument("--finetune-from", type=Path, default=None, metavar="MODEL_DIR",
-                   help="Fine-tune from an existing model directory (loads weights + tokenizer; skips BPE training). "
-                        "Use with --text and a lower --lr (e.g. 1e-4). "
-                        "Example: --finetune-from ./out_stretch --text hardwareone_qa.txt")
+                   help="SAME-DOMAIN incremental training only: loads the source model's weights AND tokenizer "
+                        "(skips BPE training), so the new model INHERITS everything the source knew. Do NOT use "
+                        "to change topics — for a new domain, omit this flag to train a fresh tokenizer + weights. "
+                        "Use with --text and a lower --lr (e.g. 1e-4).")
     p.add_argument("--qa-test-prompts", type=Path, default=None, metavar="FILE",
                    help="File with Q&A test prompts (one Q: per line). Used for domain-specific generation tests.")
+    p.add_argument("--scan-forbidden", type=str, default=None, metavar="WORDS",
+                   help="Comma-separated words that must NOT appear in the model's output. After the "
+                        "post-training Q&A test, warns loudly if any show up (catches off-domain "
+                        "contamination). E.g. --scan-forbidden hardwareone,openwifi,espnow when training Pokemon.")
     p.add_argument("--special-tokens", type=Path, default=None, metavar="FILE",
                    help="Optional file of extra tokens (one per line) the BPE tokenizer should keep whole — "
                         "e.g. domain commands or multi-word terms. Blank lines and # comments are ignored. "
@@ -292,7 +302,8 @@ def train_bpe_tokenizer(text_paths: list[Path], vocab_size: int, out_dir: Path,
     return hf_tok
 
 
-def run_qa_test(model, tokenizer, device, label: str, prompts: list[str] | None = None) -> None:
+def run_qa_test(model, tokenizer, device, label: str, prompts: list[str] | None = None,
+                forbidden: list[str] | None = None) -> None:
     """Run generation test with Q&A prompts and print results.
 
     Uses the same stop rules as the ESP32 firmware: halt when the model emits
@@ -346,6 +357,7 @@ def run_qa_test(model, tokenizer, device, label: str, prompts: list[str] | None 
     if stop_ids:
         print(f"  (generation stops on Q:/A: token ids={stop_ids}, same as device firmware)")
     model.eval()
+    collected: list[str] = []
     for prompt_text in prompts:
         try:
             input_ids = tokenizer.encode(prompt_text, return_tensors="pt").to(device)
@@ -385,11 +397,30 @@ def run_qa_test(model, tokenizer, device, label: str, prompts: list[str] | None 
             tail = f"  [stopped: {stop_name}]" if ended_on_stop else ""
             print(f"    {prompt_text}")
             print(f"      -> {answer}{tail}")
+            collected.append(answer)
             print()
         except Exception as e:
             print(f"    {prompt_text}")
             print(f"      -> ERROR: {e}")
             print()
+
+    # Contamination scan: flag any forbidden (off-domain) word the model emitted.
+    # This is the automatic version of scan_contamination.py --model, run on the
+    # trainer's own post-training generation so a mis-trained model is caught here
+    # instead of on the device.
+    if forbidden:
+        low = "\n".join(collected).lower()
+        hits = sorted({w for w in forbidden if w and w.lower() in low})
+        print("  " + "=" * 62)
+        if hits:
+            print(f"  !! CONTAMINATION — model output contains off-domain word(s): {', '.join(hits)}")
+            print(f"  !! The trained weights emit content they should not. Likely causes:")
+            print(f"  !!   - trained with --finetune-from a different-domain model (inherits it)")
+            print(f"  !!   - the training corpus contains that vocabulary (scan it: "
+                  f"scan_contamination.py --corpus <file> --forbidden ...)")
+        else:
+            print(f"  [scan] CLEAN — none of the {len(forbidden)} forbidden word(s) appeared in output.")
+        print("  " + "=" * 62)
 
 
 def load_text_dataset(args: argparse.Namespace) -> tuple[list[Path], "Dataset"]:
@@ -1003,13 +1034,27 @@ def main() -> None:
         qa_prompts = [f"{q}\nA:" if "\nA:" not in q else q for q in qa_prompts]
         print(f"  Loaded {len(qa_prompts)} custom test prompts from {args.qa_test_prompts}")
 
-    run_qa_test(inspect_model, tokenizer, device, "Post-training Q&A Test", qa_prompts)
+    forbidden = ([w.strip() for w in args.scan_forbidden.split(",") if w.strip()]
+                 if args.scan_forbidden else None)
+    run_qa_test(inspect_model, tokenizer, device, "Post-training Q&A Test", qa_prompts, forbidden)
 
     print("─" * 60)
 
     print(f"Saving to {out_dir} …")
     model.save_pretrained(out_dir, safe_serialization=True)
     tokenizer.save_pretrained(out_dir)
+
+    # Remove HF Trainer checkpoints from the deliverable folder. Each
+    # trainer_ckpt/checkpoint-*/ holds its OWN full model.safetensors; if left
+    # here, the browser converter globs all of them as "shards" of one model and
+    # fails (or packs the wrong weights). The final model saved above is all the
+    # converter needs. Only runs after a successful final save, so an interrupted
+    # run keeps its checkpoints for --resume.
+    import shutil
+    ckpt_dir = out_dir / "trainer_ckpt"
+    if ckpt_dir.exists():
+        shutil.rmtree(ckpt_dir, ignore_errors=True)
+        print(f"Cleaned training checkpoints from {ckpt_dir} (deliverable folder is now converter-ready)")
 
     for p in temp_files:
         try:

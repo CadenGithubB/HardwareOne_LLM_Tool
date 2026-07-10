@@ -876,6 +876,18 @@ def main() -> None:
     model.save_pretrained(out_dir, safe_serialization=True)
     tokenizer.save_pretrained(out_dir)
 
+    # Remove HF Trainer checkpoints from the deliverable folder. Each
+    # trainer_ckpt/checkpoint-*/ holds its OWN full model.safetensors; if left
+    # here, the browser converter globs all of them as "shards" of one model and
+    # fails (or packs the wrong weights). The final model saved above is all the
+    # converter needs. Only runs after a successful final save, so an interrupted
+    # run keeps its checkpoints for --resume.
+    import shutil
+    ckpt_dir = out_dir / "trainer_ckpt"
+    if ckpt_dir.exists():
+        shutil.rmtree(ckpt_dir, ignore_errors=True)
+        print(f"Cleaned training checkpoints from {ckpt_dir} (deliverable folder is now converter-ready)")
+
     for p in temp_files:
         try:
             p.unlink()

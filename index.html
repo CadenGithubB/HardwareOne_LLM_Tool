@@ -1350,9 +1350,27 @@ document.addEventListener('DOMContentLoaded', function () {
 async function handleFiles(files) {
   console.group('[app] handleFiles', files.length, 'files');
 
+  // Restrict to the shallowest directory level of the drop. HF Trainer leaves
+  // checkpoint copies in deeper trainer_ckpt/checkpoint-*/ subfolders — each a
+  // COMPLETE model.safetensors (not a shard) — and globbing all of them makes
+  // the converter treat 2-3 full models as "shards" and fail, or pack the wrong
+  // weights/config/tokenizer. Real sharded models keep every shard at the same
+  // top level, so this keeps them while dropping checkpoint leftovers.
+  const relOf   = (f) => (f.webkitRelativePath || f.name).replace(/\\/g, '/');
+  const depthOf = (f) => relOf(f).split('/').length;
+  const allSt = files.filter(f => f.name.endsWith('.safetensors'));
+  let scoped = files;
+  if (allSt.length > 0) {
+    const minDepth = Math.min(...allSt.map(depthOf));
+    const ignored = files.filter(f => depthOf(f) > minDepth &&
+      (f.name.endsWith('.safetensors') || f.name === 'config.json' || f.name === 'tokenizer.json')).length;
+    if (ignored > 0) uiLog('warn', `Ignoring ${ignored} file(s) in checkpoint subfolders (e.g. trainer_ckpt/) — using only the top-level model.`);
+    scoped = files.filter(f => depthOf(f) <= minDepth);
+  }
+
   // Build lookup by filename (case-insensitive, strip path prefix)
   const byName = {};
-  for (const f of files) {
+  for (const f of scoped) {
     const short = f.name.toLowerCase();
     const full  = (f.webkitRelativePath || f.name).replace(/\\/g, '/').toLowerCase();
     byName[short] = f;
@@ -1364,11 +1382,20 @@ async function handleFiles(files) {
   if (!configFile) { uiLog('err', 'config.json not found in dropped files'); console.groupEnd(); return; }
 
   const tokFile = findFile(byName, 'tokenizer.json');
-  if (!tokFile)   uiLog('warn', 'tokenizer.json not found — tokenizer will be empty');
+  if (!tokFile) {
+    // Never silently reuse a previously-loaded model's tokenizer — that embeds
+    // the wrong vocab into this model's .bin (a prior HardwareOne tokenizer
+    // would decode this model's tokens into HardwareOne wordpieces). Refuse.
+    state.tokenizer = null;
+    state.ready = false;
+    uiLog('err', "tokenizer.json not found — re-drop the full model folder (must include tokenizer.json). Refusing to reuse a previous model's tokenizer.");
+    console.groupEnd();
+    return;
+  }
 
-  const stFiles = files.filter(f => f.name.endsWith('.safetensors'))
+  const stFiles = scoped.filter(f => f.name.endsWith('.safetensors'))
     .sort((a, b) => a.name.localeCompare(b.name));
-  const ptFiles = files.filter(f => f.name === 'pytorch_model.bin' ||
+  const ptFiles = scoped.filter(f => f.name === 'pytorch_model.bin' ||
     (f.name.startsWith('pytorch_model-') && f.name.endsWith('.bin')))
     .sort((a, b) => a.name.localeCompare(b.name));
 
