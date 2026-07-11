@@ -528,13 +528,13 @@ def run_estimate_only(args: argparse.Namespace) -> None:
 # vocab", emits a fixed refusal instead of hallucinating. We derive that vocab
 # from the training corpus and write it into the output folder as domain_vocab.txt
 # so the browser converter auto-loads it. Tokenization here MUST match the device
-# and build_your_own_model/extract_domain_vocab.py: lowercase, then split on any
+# and training_scripts/extract_domain_vocab.py: lowercase, then split on any
 # non-[a-z0-9] character (whole-word, ASCII).
 _DOMAIN_WORD_RE = re.compile(r"[a-z0-9]+")
 
 # Function words that must never enter the allow-list — including even one would
 # make the gate accept every prompt containing it ("is" -> everything passes).
-# Mirrors build_your_own_model/wordlists/stopwords_en.txt (keep roughly in sync).
+# Mirrors training_scripts/wordlists/stopwords_en.txt (keep roughly in sync).
 _DOMAIN_STOPWORDS = frozenset("""
 a about above after again against all am an and any are aren around as at be
 because been before being below between both but by can cannot could couldn did
