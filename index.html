@@ -1448,6 +1448,11 @@ document.addEventListener('DOMContentLoaded', function () {
 async function handleFiles(files) {
   console.group('[app] handleFiles', files.length, 'files');
 
+  // A new model selection clears any prior domain vocab so it can't leak into
+  // the next model; folder auto-load or a manual pick sets it again below.
+  gDomainVocab = [];
+  { const _vc = $('model-vocab-count'); if (_vc) _vc.textContent = ''; }
+
   // Restrict to the shallowest directory level of the drop. HF Trainer leaves
   // checkpoint copies in deeper trainer_ckpt/checkpoint-*/ subfolders — each a
   // COMPLETE model.safetensors (not a shard) — and globbing all of them makes
@@ -1530,6 +1535,22 @@ async function handleFiles(files) {
 
     invalidateBuiltOutput();
     show('card-arch'); show('card-settings'); show('card-info'); show('card-convert');
+
+    // Auto-load a domain allow-list shipped in the model folder: the trainer
+    // writes domain_vocab.txt next to config.json. Pre-fills the refusal-gate
+    // word list so the user need not select it by hand; a manual pick via the
+    // Domain words input still overrides it afterward.
+    const vocabFile = scoped.find(f => f.name.toLowerCase().endsWith('domain_vocab.txt'));
+    if (vocabFile) {
+      try {
+        gDomainVocab = parseVocabText(await vocabFile.text());
+        const vc = $('model-vocab-count');
+        if (vc) vc.textContent = gDomainVocab.length + ' words (from model folder)';
+        uiLog('ok', `Domain gate: auto-loaded ${gDomainVocab.length} words from ${vocabFile.name} — off-topic prompts will be refused.`);
+      } catch (err) {
+        uiLog('warn', 'Found a domain_vocab file but could not read it: ' + (err && err.message ? err.message : err));
+      }
+    }
     updateEstimate();
     logGroupSizeVsDimIfNeeded();
     syncConvertButton();
@@ -1937,18 +1958,24 @@ async function onModelIconChange(e) {
 }
 
 // Load the domain-vocab .txt (one word per line): lowercase, trim, dedupe, drop empties.
+// Parse a domain word-list file into a de-duped, lowercased word array. Skips
+// blank lines and '#' comments (the trainer / extract_domain_vocab.py write a
+// 3-line header). Shared by the manual picker and the folder auto-loader.
+function parseVocabText(text) {
+  const seen = new Set();
+  for (const raw of (text || '').split(/\r?\n/)) {
+    const w = raw.trim().toLowerCase();
+    if (w && !w.startsWith('#')) seen.add(w);
+  }
+  return [...seen];
+}
+
 async function onModelVocabChange(e) {
   const countEl = $('model-vocab-count');
   const file = e.target.files && e.target.files[0];
   if (!file) { gDomainVocab = []; if (countEl) countEl.textContent = ''; return; }
   try {
-    const text = await file.text();
-    const seen = new Set();
-    for (const raw of text.split(/\r?\n/)) {
-      const w = raw.trim().toLowerCase();
-      if (w && !w.startsWith('#')) seen.add(w);  // skip blank + '#' comment lines (extract_domain_vocab.py writes a 3-line header)
-    }
-    gDomainVocab = [...seen];
+    gDomainVocab = parseVocabText(await file.text());
     if (countEl) countEl.textContent = gDomainVocab.length + ' words';
     uiLog('info', 'Domain vocab loaded: ' + gDomainVocab.length + ' unique words');
   } catch (err) {
