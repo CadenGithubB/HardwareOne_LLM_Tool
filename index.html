@@ -382,6 +382,44 @@
     </div>
   </div>
 
+  <!-- Step 3.5 -->
+  <div class="card hidden" id="card-info">
+    <div class="card-header">
+      <span class="card-title">Model Info (optional)</span>
+    </div>
+    <div class="card-body">
+      <p style="font-size:12px;color:var(--muted);margin:0 0 12px;line-height:1.55;max-width:52em;">
+        Baked into the <code>.bin</code> and shown on the device's LLM screen when the model loads. Both optional. The icon is reduced to a 32×32 black-and-white glyph — light areas light up on the OLED, dark/transparent areas stay off; the preview shows exactly what the device draws.
+      </p>
+      <div class="settings-row" style="align-items:flex-start;">
+        <label for="model-desc" style="margin-top:6px;">Description</label>
+        <textarea id="model-desc" rows="2" maxlength="255"
+          placeholder="e.g. Kanto Pokédex — the original 151"
+          style="flex:1;min-width:200px;resize:vertical;font:inherit;padding:6px 8px;"></textarea>
+      </div>
+      <div class="settings-row" style="margin-top:10px;align-items:center;">
+        <label for="model-icon">Icon</label>
+        <input type="file" id="model-icon" accept="image/*" style="flex:1;min-width:180px;">
+        <canvas id="model-icon-preview" width="32" height="32" title="OLED preview (32×32)"
+          style="width:64px;height:64px;image-rendering:pixelated;border:1px solid var(--border,#333);background:#000;"></canvas>
+      </div>
+      <div class="settings-row" style="margin-top:10px;align-items:center;">
+        <label for="model-vocab">Domain words</label>
+        <input type="file" id="model-vocab" accept=".txt,text/plain" style="flex:1;min-width:180px;">
+        <span id="model-vocab-count" style="font-size:12px;color:var(--muted);"></span>
+      </div>
+      <div class="settings-row" style="margin-top:10px;align-items:flex-start;">
+        <label for="model-refusal" style="margin-top:6px;">Refusal answer</label>
+        <input type="text" id="model-refusal" maxlength="255"
+          placeholder="e.g. I can only answer Pokédex questions."
+          style="flex:1;min-width:200px;font:inherit;padding:6px 8px;">
+      </div>
+      <p style="font-size:11px;color:var(--muted);margin:8px 0 0;line-height:1.5;max-width:52em;">
+        <strong>Domain words</strong> (optional): one word per line (from <code>extract_domain_vocab.py</code>). When provided, the device refuses any prompt containing none of these words, replying with the <strong>Refusal answer</strong>. Leave both empty to disable the gate.
+      </p>
+    </div>
+  </div>
+
   <!-- Step 4 -->
   <div class="card hidden" id="card-convert">
     <div class="card-header">
@@ -646,11 +684,63 @@ const QUANT   = { F32: 0, INT8: 1 };
 /** Exposed for console diagnostics from the app script */
 window.__LLM1_FORMAT = { MAGIC, QUANT };
 
-function buildOutputBin({ config, tokBuf, embedData, posEmbedData, layers, finalNorm, finalNormBias, lmHead, quantType, groupSize, tokenizer }) {
+function buildOutputBin({ config, tokBuf, embedData, posEmbedData, layers, finalNorm, finalNormBias, lmHead, quantType, groupSize, tokenizer, description, iconBits, refusal, vocabWords }) {
   console.group('[format] buildOutputBin');
   console.log('config:', config, 'quantType:', quantType, 'groupSize:', groupSize);
   const fileVersion = 2;
   const parts = [];
+
+  // Optional info block (description + icon) — sits between the 64-byte header and
+  // the tokenizer. Signaled by a uint32 length written at header offset 24, a
+  // version-independent free-pad field. file_version STAYS 2: bumping it would
+  // opt into the v3 weight layout (per-tensor prefix bytes) the device expects but
+  // we don't write. 0 = no block. Mirrors the tokenizer's uint32-length idiom so a
+  // reader can skip it without understanding it.
+  const descBytes = new TextEncoder().encode((description || '').slice(0, 255));
+  const hasIcon   = iconBits instanceof Uint8Array && iconBits.length === 128;
+
+  // Domain refusal gate (optional, appended AFTER the icon): a refusal answer +
+  // a lowercased allow-list of domain words. On device, a prompt containing none
+  // of these words is refused instead of generated. Words are lowercased/deduped
+  // in the UI layer; here we just length-prefix and pack them.
+  const refusalBytes = new TextEncoder().encode((refusal || '').slice(0, 255));
+  const encWords = [];
+  let vocabLen = 0;
+  for (const w of (Array.isArray(vocabWords) ? vocabWords : [])) {
+    const wb = new TextEncoder().encode(w);
+    if (wb.length === 0 || wb.length > 255) continue;   // uint8 word_len field
+    if (encWords.length >= 65535) break;                 // uint16 vocab_count field
+    encWords.push(wb);
+    vocabLen += 1 + wb.length;
+  }
+  const hasDomain = refusalBytes.length > 0 || encWords.length > 0;
+  const domainLen = hasDomain ? (2 + refusalBytes.length + 2 + vocabLen) : 0;
+
+  let infoBuf = null;
+  if (descBytes.length > 0 || hasIcon || hasDomain) {
+    const iconLen = hasIcon ? 128 : 0;
+    infoBuf = new ArrayBuffer(2 + descBytes.length + 1 + 1 + 1 + 2 + iconLen + domainLen);
+    const iv = new DataView(infoBuf);
+    let o = 0;
+    iv.setUint16(o, descBytes.length, true); o += 2;
+    new Uint8Array(infoBuf, o, descBytes.length).set(descBytes); o += descBytes.length;
+    iv.setUint8(o, hasIcon ? 1 : 0);  o += 1;   // icon_fmt: 1 = 1bpp MSB-first row-major
+    iv.setUint8(o, hasIcon ? 32 : 0); o += 1;   // icon_w
+    iv.setUint8(o, hasIcon ? 32 : 0); o += 1;   // icon_h
+    iv.setUint16(o, iconLen, true);   o += 2;
+    if (hasIcon) { new Uint8Array(infoBuf, o, iconLen).set(iconBits); o += iconLen; }  // advance past icon so domain lands after it
+    if (hasDomain) {
+      iv.setUint16(o, refusalBytes.length, true); o += 2;
+      new Uint8Array(infoBuf, o, refusalBytes.length).set(refusalBytes); o += refusalBytes.length;
+      iv.setUint16(o, encWords.length, true); o += 2;
+      for (const wb of encWords) {
+        iv.setUint8(o, wb.length); o += 1;
+        new Uint8Array(infoBuf, o, wb.length).set(wb); o += wb.length;
+      }
+    }
+  }
+  const infoLen = infoBuf ? infoBuf.byteLength : 0;
+  console.log('[format] info block:', infoLen, 'bytes (desc=' + descBytes.length + ' icon=' + (hasIcon ? '32x32' : 'none') + ' refusal=' + refusalBytes.length + ' vocab=' + encWords.length + ')');
 
   // Header
   const hdr = new ArrayBuffer(64);
@@ -667,8 +757,10 @@ function buildOutputBin({ config, tokBuf, embedData, posEmbedData, layers, final
   dv.setUint32(15, config.vocab_size,  true);
   dv.setUint16(19, config.seq_len,     true);
   dv.setUint8 (21, config.arch_type ?? 0);  // 0=Llama, 1=GPT-2
-  // bytes 22-63 remain zero (pad)
+  dv.setUint32(24, infoLen, true);          // info block length (0 = none), LE
+  // bytes 22-23 reserved (v3 mixed-quant); 28-63 remain zero (pad)
   parts.push(hdr);
+  if (infoBuf) parts.push(infoBuf);         // layout: header -> [info block] -> tokenizer
   console.log('[format] header written (64 bytes) version=' + fileVersion + ' arch_type=' + (config.arch_type ?? 0));
   {
     const u8 = new Uint8Array(hdr);
@@ -741,7 +833,7 @@ function buildOutputBin({ config, tokBuf, embedData, posEmbedData, layers, final
 
   const manifest = buildFirmwareManifest({
     config, tokBuf, embedData, posEmbedData, layers, finalNorm, finalNormBias, lmHead, quantType, groupSize, blobSize: total,
-    tokenizer: tokenizer ?? null,
+    tokenizer: tokenizer ?? null, infoLen,
   });
   console.log('[format] FIRMWARE_MANIFEST_JSON\n' + JSON.stringify(manifest, null, 2));
   console.groupEnd();
@@ -749,7 +841,7 @@ function buildOutputBin({ config, tokBuf, embedData, posEmbedData, layers, final
   const out = new Uint8Array(total);
   let off   = 0;
   for (const b of parts) { out.set(new Uint8Array(b), off); off += b.byteLength; }
-  return { blob: new Blob([out], { type: 'application/octet-stream' }), manifest };
+  return { blob: new Blob([out], { type: 'application/octet-stream' }), manifest, infoLen };
 }
 
 /** Number of logical elements in a weight tensor */
@@ -853,7 +945,7 @@ function formatTrainingAlignmentUiHtml(section) {
 function buildFirmwareManifest(meta) {
   const {
     config, tokBuf, embedData, posEmbedData, layers, finalNorm, finalNormBias, lmHead, quantType, groupSize, blobSize,
-    tokenizer,
+    tokenizer, infoLen,
   } = meta;
   const dim = config.dim, n_heads = config.n_heads, n_kv_heads = config.n_kv_heads;
   const head_dim = Math.floor(dim / n_heads);
@@ -877,6 +969,7 @@ function buildFirmwareManifest(meta) {
     format_magic_hex: '0x' + MAGIC.toString(16).toUpperCase(),
     spec_version: 2,
     file_size_bytes: blobSize,
+    info_block_bytes: infoLen || 0,  // header offset 24 (0 = none); desc + 32x32 1bpp icon
     global_quant_type: quantType === QUANT.INT8 ? 'INT8' : 'FP32',
     group_size: groupSize,
     derived_geometry: {
@@ -898,7 +991,8 @@ function buildFirmwareManifest(meta) {
       seq_len: config.seq_len,
     },
     layout_order: [
-      '64-byte header',
+      '64-byte header (info_len @ offset 24)',
+      infoLen ? 'info block: uint16 desc_len + desc + icon_fmt/w/h + uint16 icon_len + 1bpp icon (+ optional uint16 refusal_len + refusal + uint16 vocab_count + per-word uint8 len+bytes)' : null,
       'uint32 tokenizer_len + tokenizer blob',
       'embedding tensor block',
       posEmbedData ? 'positional embedding tensor block (wpe)' : null,
@@ -940,7 +1034,7 @@ function buildFirmwareManifest(meta) {
   return out;
 }
 
-function estimateSize({ config, tokBufSize, quantType, groupSize }) {
+function estimateSize({ config, tokBufSize, quantType, groupSize, infoBytes = 0 }) {
   const { dim, hidden_dim, n_layers, n_heads, n_kv_heads, vocab_size } = config;
   const head_dim = Math.floor(dim / n_heads);
   const kv_dim   = n_kv_heads * head_dim;
@@ -953,7 +1047,7 @@ function estimateSize({ config, tokBufSize, quantType, groupSize }) {
   const embedBytes = quantType === QUANT.F32
     ? 4 + nEmbed * 4
     : 4 + nEmbed + Math.ceil(nEmbed / groupSize) * 4;
-  let s = 64 + 4 + tokBufSize + embedBytes;
+  let s = 64 + infoBytes + 4 + tokBufSize + embedBytes;
   const hasNormBias = (config.arch_type === 1);  // GPT-2 v2: LayerNorm beta
   for (let i = 0; i < n_layers; i++) {
     s += 4 + dim * 4;          // attn_norm
@@ -1342,6 +1436,10 @@ document.addEventListener('DOMContentLoaded', function () {
     r.addEventListener('input', onBuildOptionChanged);
   });
   $('group-select').addEventListener('change', onBuildOptionChanged);
+  const iconInput = $('model-icon');
+  if (iconInput) iconInput.addEventListener('change', onModelIconChange);
+  const vocabInput = $('model-vocab');
+  if (vocabInput) vocabInput.addEventListener('change', onModelVocabChange);
 
   console.groupEnd();
 });
@@ -1431,7 +1529,7 @@ async function handleFiles(files) {
     state.ready   = true;
 
     invalidateBuiltOutput();
-    show('card-arch'); show('card-settings'); show('card-convert');
+    show('card-arch'); show('card-settings'); show('card-info'); show('card-convert');
     updateEstimate();
     logGroupSizeVsDimIfNeeded();
     syncConvertButton();
@@ -1794,6 +1892,72 @@ function printLlmConverterDiagnostics(o) {
 }
 
 // ── Conversion ────────────────────────────────────────────────────────
+// ── Model info-block icon (optional) ───────────────────────────────────────
+// Render an uploaded image to a 32x32 1bpp glyph for the device OLED. Held here
+// and consumed by startConversion; null when no icon is chosen.
+let gModelIconBits = null;  // Uint8Array(128), MSB-first, row-major
+let gDomainVocab = [];      // lowercased, de-duped, trimmed domain words for the refusal gate ([] = none)
+
+function packCanvasTo1bpp(ctx) {
+  const img = ctx.getImageData(0, 0, 32, 32).data;
+  const out = new Uint8Array(128);  // (32/8) * 32
+  for (let y = 0; y < 32; y++) {
+    for (let x = 0; x < 32; x++) {
+      const i = (y * 32 + x) * 4;
+      const a = img[i + 3];
+      const lum = 0.299 * img[i] + 0.587 * img[i + 1] + 0.114 * img[i + 2];
+      // "on" = opaque AND bright, matching the black-background preview: bright
+      // pixels light up on the (also black) OLED. MSB-first: 0x80 = leftmost pixel.
+      if (a >= 128 && lum >= 128) out[y * 4 + (x >> 3)] |= (0x80 >> (x & 7));
+    }
+  }
+  return out;
+}
+
+async function onModelIconChange(e) {
+  const canvas = $('model-icon-preview');
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, 32, 32);
+  const file = e.target.files && e.target.files[0];
+  if (!file) { gModelIconBits = null; return; }
+  try {
+    const bmp = await createImageBitmap(file);
+    const s = Math.min(32 / bmp.width, 32 / bmp.height);
+    const w = Math.max(1, Math.round(bmp.width * s));
+    const h = Math.max(1, Math.round(bmp.height * s));
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(bmp, (32 - w) >> 1, (32 - h) >> 1, w, h);  // fit + center on black
+    gModelIconBits = packCanvasTo1bpp(ctx);
+    uiLog('info', 'Icon loaded → 32x32 1bpp (128 bytes)');
+  } catch (err) {
+    gModelIconBits = null;
+    uiLog('warn', 'Icon load failed: ' + (err && err.message ? err.message : err));
+  }
+}
+
+// Load the domain-vocab .txt (one word per line): lowercase, trim, dedupe, drop empties.
+async function onModelVocabChange(e) {
+  const countEl = $('model-vocab-count');
+  const file = e.target.files && e.target.files[0];
+  if (!file) { gDomainVocab = []; if (countEl) countEl.textContent = ''; return; }
+  try {
+    const text = await file.text();
+    const seen = new Set();
+    for (const raw of text.split(/\r?\n/)) {
+      const w = raw.trim().toLowerCase();
+      if (w && !w.startsWith('#')) seen.add(w);  // skip blank + '#' comment lines (extract_domain_vocab.py writes a 3-line header)
+    }
+    gDomainVocab = [...seen];
+    if (countEl) countEl.textContent = gDomainVocab.length + ' words';
+    uiLog('info', 'Domain vocab loaded: ' + gDomainVocab.length + ' unique words');
+  } catch (err) {
+    gDomainVocab = [];
+    if (countEl) countEl.textContent = '';
+    uiLog('warn', 'Vocab load failed: ' + (err && err.message ? err.message : err));
+  }
+}
+
 async function startConversion() {
   if (!state.ready) { uiLog('warn', 'Not ready'); return; }
   if (state.converting) return;
@@ -1805,6 +1969,12 @@ async function startConversion() {
   const quantType = quantSel === 'int8' ? QUANT.INT8 : QUANT.F32;
   const groupSize = parseInt($('group-select').value, 10);
   const fpRun = quantSel + '|' + groupSize;
+
+  // Optional model info block (baked into the .bin, shown on-device at load).
+  const modelDesc = ($('model-desc')?.value || '').trim();
+  const modelIcon = gModelIconBits;  // Uint8Array(128) MSB-first, or null
+  const modelRefusal = ($('model-refusal')?.value || '').trim();
+  const modelVocab = gDomainVocab;   // lowercased word list ([] = no domain gate)
 
   console.group('[app] startConversion quant=' + (quantType===QUANT.INT8?'int8':'f32') + ' group=' + groupSize);
 
@@ -2103,11 +2273,12 @@ self.onmessage = function ({ data }) {
 
     // ── Build binary ──
     setProgress(97, 'Packing binary…');
-    const { blob, manifest } = buildOutputBin({ config: state.config, tokBuf, embedData,
+    const { blob, manifest, infoLen } = buildOutputBin({ config: state.config, tokBuf, embedData,
       posEmbedData, layers, finalNorm, finalNormBias, lmHead, quantType, groupSize,
-      tokenizer: state.tokenizer ?? null });
+      tokenizer: state.tokenizer ?? null, description: modelDesc, iconBits: modelIcon,
+      refusal: modelRefusal, vocabWords: modelVocab });
     const sizeMB  = (blob.size / 1024 / 1024).toFixed(2);
-    const estimatedBytes = estimateSize({ config: state.config, tokBufSize: tokBuf.byteLength, quantType, groupSize });
+    const estimatedBytes = estimateSize({ config: state.config, tokBufSize: tokBuf.byteLength, quantType, groupSize, infoBytes: infoLen });
 
     printLlmConverterDiagnostics({
       config: state.config,
