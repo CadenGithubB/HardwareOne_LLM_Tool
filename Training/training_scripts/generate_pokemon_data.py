@@ -22,6 +22,8 @@ import argparse
 import random
 from pathlib import Path
 
+from pokemon_gen1_supplement import CATCH_LOC, DEX_ENTRY
+
 VALID_TYPES = {
     "Normal", "Fire", "Water", "Grass", "Electric", "Ice", "Fighting",
     "Poison", "Ground", "Flying", "Psychic", "Bug", "Rock", "Ghost", "Dragon",
@@ -229,13 +231,14 @@ CATEGORY = {
     149: "Dragon Pokemon", 150: "Genetic Pokemon", 151: "New Species Pokemon",
 }
 
-# Type immunities (Gen 1): (attacker_type, defender_type) -> no effect.
+# Type immunities (Gen 1): (attacker_type, defender_type) -> no effect (0x).
 IMMUNITIES = [
     ("Normal", "Ghost"),
     ("Fighting", "Ghost"),
     ("Ghost", "Normal"),
     ("Ground", "Flying"),
     ("Electric", "Ground"),
+    ("Ghost", "Psychic"),   # Gen-1 RBY bug: Ghost moves do 0 to Psychic (intended 2x)
 ]
 
 # ── Kanto world knowledge ────────────────────────────────────────────────
@@ -271,7 +274,19 @@ ELITE_FOUR = [
     ("Lance",   "Dragon"),
 ]
 
-# Offensive type chart (Kanto, intended design). type -> super effective vs [...]
+TYPES = ["Normal", "Fire", "Water", "Grass", "Electric", "Ice", "Fighting",
+         "Poison", "Ground", "Flying", "Psychic", "Bug", "Rock", "Ghost", "Dragon"]
+
+# Gen-1 (RBY) type chart. Three Gen-1-specific facts, verified 2026-07-10:
+#  (a) Bug <-> Poison are MUTUALLY super effective (2x each way). Modern gens
+#      changed both, but in RBY Bug beats Poison and Poison beats Bug — this is
+#      why Bulbasaur (Grass/Poison) takes 4x from Bug. (STRONG_VS + WEAK_TO below.)
+#  (b) Ghost -> Psychic is 0x in RBY (the famous programming bug), NOT the
+#      intended 2x. Modeled as an immunity + omitted from Ghost's STRONG_VS so the
+#      data matches the lore passage about the Psychic-type glitch.
+#  (c) STRONG_VS and WEAK_TO are exact transposes (A super-effective vs B  <=>
+#      B weak to A); RESISTS/WEAK_TO/IMMUNITIES never double-assign a cell.
+# Offensive: type -> super effective vs [...]
 STRONG_VS = {
     "Normal":   [],
     "Fire":     ["Grass", "Ice", "Bug"],
@@ -280,16 +295,16 @@ STRONG_VS = {
     "Electric": ["Water", "Flying"],
     "Ice":      ["Grass", "Ground", "Flying", "Dragon"],
     "Fighting": ["Normal", "Ice", "Rock"],
-    "Poison":   ["Grass"],
+    "Poison":   ["Grass", "Bug"],                        # Gen-1: Poison 2x vs Bug
     "Ground":   ["Fire", "Electric", "Poison", "Rock"],
     "Flying":   ["Grass", "Fighting", "Bug"],
     "Psychic":  ["Fighting", "Poison"],
-    "Bug":      ["Grass", "Psychic"],
+    "Bug":      ["Grass", "Psychic", "Poison"],          # Gen-1: Bug 2x vs Poison
     "Rock":     ["Fire", "Ice", "Flying", "Bug"],
-    "Ghost":    ["Psychic", "Ghost"],
+    "Ghost":    ["Ghost"],                               # Gen-1 bug: Ghost->Psychic is 0x, see IMMUNITIES
     "Dragon":   ["Dragon"],
 }
-# Defensive weaknesses. type -> takes super effective damage from [...]
+# Defensive weaknesses. type -> takes super effective (2x) damage from [...]
 WEAK_TO = {
     "Normal":   ["Fighting"],
     "Fire":     ["Water", "Ground", "Rock"],
@@ -298,14 +313,33 @@ WEAK_TO = {
     "Electric": ["Ground"],
     "Ice":      ["Fire", "Fighting", "Rock"],
     "Fighting": ["Flying", "Psychic"],
-    "Poison":   ["Ground", "Psychic"],
+    "Poison":   ["Ground", "Psychic", "Bug"],            # Gen-1: Bug 2x vs Poison
     "Ground":   ["Water", "Grass", "Ice"],
     "Flying":   ["Electric", "Ice", "Rock"],
     "Psychic":  ["Bug"],
-    "Bug":      ["Fire", "Flying", "Rock"],
+    "Bug":      ["Fire", "Flying", "Rock", "Poison"],     # Gen-1: Poison 2x vs Bug
     "Rock":     ["Water", "Grass", "Fighting", "Ground"],
     "Ghost":    ["Ghost"],
     "Dragon":   ["Ice", "Dragon"],
+}
+# Defensive resistances. type -> takes not-very-effective (0.5x) damage from [...]
+# Verified Gen-1 (three independent reconstructions + reconciliation, 2026-07-10).
+RESISTS = {
+    "Normal":   [],
+    "Fire":     ["Fire", "Grass", "Ice", "Bug"],
+    "Water":    ["Fire", "Water", "Ice"],
+    "Grass":    ["Water", "Electric", "Grass", "Ground"],
+    "Electric": ["Electric", "Flying"],
+    "Ice":      ["Ice"],
+    "Fighting": ["Bug", "Rock"],
+    "Poison":   ["Grass", "Fighting", "Poison"],
+    "Ground":   ["Poison", "Rock"],
+    "Flying":   ["Grass", "Fighting", "Bug"],
+    "Psychic":  ["Fighting", "Psychic"],
+    "Bug":      ["Grass", "Fighting", "Ground"],
+    "Rock":     ["Normal", "Fire", "Poison", "Flying"],
+    "Ghost":    ["Poison", "Bug"],
+    "Dragon":   ["Fire", "Water", "Electric", "Grass"],
 }
 
 # Locations: (name, fact sentence)
@@ -475,17 +509,66 @@ MECHANICS = [
      "Take a fossil to the lab on Cinnabar Island to revive it into a Pokemon."),
 ]
 
-# Prose passages — background context, not Q&A.
-PROSE = [
-    "The Kanto region is the setting of Pokemon Red, Blue, and Yellow. It has nine cities, a network of routes, and several caves. Trainers travel from Pallet Town to collect eight gym badges and challenge the Elite Four.",
-    "A Pokemon trainer's goal is to catch and train Pokemon, defeat the eight gym leaders, and become the Champion. Along the way the trainer fills the Pokedex, which records all 151 Kanto Pokemon.",
-    "Type matchups decide battles. Water beats Fire, Fire beats Grass, and Grass beats Water in a rock-paper-scissors triangle. Electric beats Water and Flying, while Ground is immune to Electric attacks.",
-    "Evolution stones let certain Pokemon evolve instantly. The Fire, Water, Thunder, Leaf, and Moon Stones each evolve a specific set of Pokemon. Eevee can become Vaporeon, Jolteon, or Flareon depending on the stone used.",
-    "Some Pokemon only evolve when traded with another player, including Kadabra into Alakazam, Machoke into Machamp, Graveler into Golem, and Haunter into Gengar.",
-    "Team Rocket is a criminal organization led by Giovanni. They appear at Mt. Moon, the Game Corner hideout, the Pokemon Tower, and Silph Co., stealing Pokemon for profit until the player drives them off.",
-    "The legendary birds are Articuno, Zapdos, and Moltres. Articuno lives in the Seafoam Islands, Zapdos in the Power Plant, and Moltres on Victory Road or Mt. Ember depending on the game.",
-    "Mew is the 151st Pokemon, a rare mythical Psychic-type. Mewtwo was created by scientists from Mew's genes and is the strongest Pokemon in Kanto, waiting in Cerulean Cave.",
-    "In the original Red and Blue games, a programming quirk made Ghost-type moves do nothing to Psychic types, even though Ghost was meant to be super effective against them. Psychic types were dominant as a result.",
+# What this model can answer — meta help (trained into the .bin like HardwareOne).
+CAPABILITIES = [
+    (["What can you do?", "What can you answer?", "What are your capabilities?",
+      "What are you capable of?"],
+     "I answer Kanto Pokemon facts: types, Pokedex numbers, entries, evolutions, catch spots, gyms, and type matchups."),
+    (["What questions can I ask?", "What can I ask you?", "What should I ask?",
+      "Help", "What can you help with?"],
+     "Try What type is Charizard, What is Pikachu's Pokedex entry, or Where can you catch Abra."),
+    (["What do you know about?", "What topics do you cover?", "What is your domain?"],
+     "I know the original 151 Kanto Pokemon plus gyms, towns, items, evolution stones, and battle types."),
+    (["Who are you?", "What is this model?", "What are you?"],
+     "I am a Kanto Pokemon Master guide for Gen-1 Pokemon Red, Blue, and Yellow facts."),
+]
+
+# Lore/background passages. Each is (open-ended question phrasings, passage).
+# The passage is trained BOTH as bare prose (pure LM exposure of the text) AND
+# as the answer to every phrasing — so "tell me about Kanto" maps onto the
+# canonical paragraph instead of the model free-associating. Passages are kept
+# SHORT and factually dense: a tiny model memorizes tight, self-contained text
+# far better than long flowery prose, and short passages drift less.
+LORE = [
+    (["Tell me about Kanto.", "Describe the Kanto region.", "What is the Kanto region?",
+      "Tell me about the Kanto region.", "Where does the game take place?"],
+     "The Kanto region is the setting of Pokemon Red, Blue, and Yellow. It has nine cities, a network of routes, and several caves. Trainers travel from Pallet Town to collect eight gym badges and challenge the Elite Four."),
+    (["What is a Pokemon trainer's goal?", "What does a Pokemon trainer do?",
+      "Tell me about being a trainer.", "What is the point of the game?"],
+     "A Pokemon trainer's goal is to catch and train Pokemon, defeat the eight gym leaders, and become the Champion. Along the way the trainer fills the Pokedex, which records all 151 Kanto Pokemon."),
+    (["Explain type matchups.", "How do type matchups work?", "Tell me about type effectiveness.",
+      "How do types work in battle?"],
+     "Type matchups decide battles. Water beats Fire, Fire beats Grass, and Grass beats Water in a rock-paper-scissors triangle. Electric beats Water and Flying, while Ground is immune to Electric attacks."),
+    (["Tell me about evolution stones.", "How do evolution stones work?", "What are evolution stones?",
+      "Which Pokemon use evolution stones?"],
+     "Evolution stones let certain Pokemon evolve instantly. The Fire, Water, Thunder, Leaf, and Moon Stones each evolve a specific set of Pokemon. Eevee can become Vaporeon, Jolteon, or Flareon depending on the stone used."),
+    (["Which Pokemon evolve by trading?", "Tell me about trade evolution.", "How does trade evolution work?",
+      "What Pokemon evolve when traded?"],
+     "Some Pokemon only evolve when traded with another player, including Kadabra into Alakazam, Machoke into Machamp, Graveler into Golem, and Haunter into Gengar."),
+    (["Tell me about Team Rocket.", "Who is Team Rocket?", "Describe Team Rocket.", "What is Team Rocket?"],
+     "Team Rocket is a criminal organization led by Giovanni. They appear at Mt. Moon, the Game Corner hideout, the Pokemon Tower, and Silph Co., stealing Pokemon for profit until the player drives them off."),
+    (["Tell me about the legendary birds.", "Who are the legendary birds?", "Describe the legendary birds.",
+      "What are the legendary birds of Kanto?"],
+     "The legendary birds are Articuno, Zapdos, and Moltres. Articuno lives in the Seafoam Islands, Zapdos in the Power Plant, and Moltres on Victory Road or Mt. Ember depending on the game."),
+    (["Tell me about Mewtwo.", "Who is Mewtwo?", "Tell me about Mew.", "What is the strongest Pokemon?"],
+     "Mew is the 151st Pokemon, a rare mythical Psychic-type. Mewtwo was created by scientists from Mew's genes and is the strongest Pokemon in Kanto, waiting in Cerulean Cave."),
+    (["Why were Psychic types so strong?", "Tell me about the Psychic type glitch.",
+      "What was the Ghost Psychic bug?"],
+     "In the original Red and Blue games, a programming quirk made Ghost-type moves do nothing to Psychic types, even though Ghost was meant to be super effective against them. Psychic types were dominant as a result."),
+    (["Tell me about the gym leaders.", "How many gyms are in Kanto?", "What are the Kanto gym leaders?",
+      "Tell me about the Kanto gyms."],
+     "The eight Kanto gym leaders are Brock, Misty, Lt. Surge, Erika, Koga, Sabrina, Blaine, and Giovanni. Defeating a leader earns a badge, and all eight badges are needed to enter the Pokemon League."),
+    (["Tell me about the Elite Four.", "Who are the Elite Four?", "What is the Pokemon League?",
+      "How do you become Champion?"],
+     "The Pokemon League is guarded by the Elite Four: Lorelei, Bruno, Agatha, and Lance. A trainer must beat all four in a row and then defeat the Champion to become the new Champion of Kanto."),
+    (["Tell me about Poke Balls.", "How do Poke Balls work?", "What kinds of Poke Balls are there?",
+      "How do you catch a Pokemon?"],
+     "Poke Balls are used to catch wild Pokemon. The basic Poke Ball is weakest, the Great Ball and Ultra Ball catch better, and the Master Ball never fails. A weakened or status-afflicted Pokemon is easier to catch."),
+    (["Who is Professor Oak?", "Tell me about Professor Oak.", "What are the starter Pokemon?",
+      "How do you start your journey?"],
+     "Professor Oak is the Pokemon researcher of Pallet Town. He gives new trainers a first partner, either Bulbasaur, Charmander, or Squirtle, along with a Pokedex to fill while traveling Kanto."),
+    (["Tell me about the Safari Zone.", "What is the Safari Zone?", "How does the Safari Zone work?"],
+     "The Safari Zone is a special reserve where trainers use Safari Balls and can throw bait or rocks instead of battling. It holds Pokemon found nowhere else, and each visit is limited to a fixed number of steps."),
 ]
 
 # ── Phrasing templates ───────────────────────────────────────────────────
@@ -533,6 +616,45 @@ ABOUT_Q = [
     "Who is {name}?",
     "Tell me about the Pokemon {name}.",
     "Give me info on {name}.",
+    # casual / informal
+    "What's {name}?",
+    "{name}?",
+    "info on {name}",
+    "tell me about {name}",
+    "whats the deal with {name}",
+]
+DEX_ENTRY_Q = [
+    "What is {name}'s Pokedex entry?",
+    "What does the Pokedex say about {name}?",
+    "Read {name}'s Pokedex entry.",
+    "What is the Pokedex entry for {name}?",
+]
+CATCH_Q = [
+    "Where can you catch {name} in Kanto?",
+    "Where is {name} found in Kanto?",
+    "Where do you find {name}?",
+    "How do you catch {name} in Kanto?",
+]
+NUM_TO_NAME_Q = [
+    "What Pokemon is number {num}?",
+    "Who is Pokedex number {num}?",
+    "What is dex number {num}?",
+    "Which Pokemon is #{num}?",
+]
+# Reverse type lookup — "list water pokemon", "which pokemon are fire type".
+TYPE_LIST_Q = [
+    "List all {t} type Pokemon.",
+    "List {t} Pokemon.",
+    "Which Pokemon are {t} type?",
+    "Which Kanto Pokemon are {t} type?",
+    "Name the {t} type Pokemon.",
+    "What Pokemon are {t} type?",
+    "Show me the {t} Pokemon.",
+    "Give me every {t} type Pokemon.",
+    "What {t} type Pokemon are there?",
+    "Are there any {t} type Pokemon?",
+    "How many {t} type Pokemon are there?",  # answer leads with the count
+    "Tell me the {t} type Pokemon.",
 ]
 
 
@@ -599,6 +721,112 @@ def build_evolves_from():
     return rev
 
 
+def type_to_names():
+    """Return {type: [names...]} in Pokedex order for reverse 'list X-type' Q&A."""
+    m = {}
+    for _num, name, types, _into in POKEMON:
+        for t in types:
+            m.setdefault(t, []).append(name)
+    return m
+
+
+# ── Type-effectiveness engine (Gen-1) ────────────────────────────────────
+# The "reasoning" that gets PRECOMPUTED: a Pokemon's net weaknesses are the
+# PRODUCT of each of its type's multipliers, so a 2x can be cancelled to 1x by
+# a partner 0.5x (Gyarados Water/Flying is NOT weak to Grass) and two 2x stack
+# to 4x (Charizard Fire/Flying takes 4x from Rock). Computing this correctly
+# needs the full chart (WEAK_TO + RESISTS + IMMUNITIES), which is why WEAK_TO
+# alone gives wrong answers for dual types.
+_IMMUNE_SET = set(IMMUNITIES)
+
+
+def _mult(atk, dtype):
+    if (atk, dtype) in _IMMUNE_SET:
+        return 0.0
+    if atk in WEAK_TO[dtype]:
+        return 2.0
+    if atk in RESISTS[dtype]:
+        return 0.5
+    return 1.0
+
+
+def _eff(atk, dtypes):
+    p = 1.0
+    for d in dtypes:
+        p *= _mult(atk, d)
+    return p
+
+
+def defense_profile(dtypes):
+    """(weak4x, weak2x, immune, resist) attacker-type lists for these type(s)."""
+    weak4, weak2, immune, resist = [], [], [], []
+    for atk in TYPES:
+        m = _eff(atk, dtypes)
+        if m == 0:
+            immune.append(atk)
+        elif m >= 4:
+            weak4.append(atk)
+        elif m > 1:
+            weak2.append(atk)
+        elif m < 1:
+            resist.append(atk)
+    return weak4, weak2, immune, resist
+
+
+def offense_coverage(dtypes):
+    """Types a Pokemon's same-type moves are super effective against (deduped)."""
+    seen, out = set(), []
+    for t in dtypes:
+        for x in STRONG_VS[t]:
+            if x not in seen:
+                seen.add(x)
+                out.append(x)
+    return out
+
+
+def _name_into():
+    """{name: into-list} for evolution-chain walks."""
+    return {name: into for _num, name, _types, into in POKEMON}
+
+
+def final_forms(name, into_map):
+    """Terminal evolution(s) of name (Eevee-style branches return all)."""
+    outs = []
+
+    def walk(n):
+        nxt = into_map.get(n) or []
+        if not nxt:
+            outs.append(n)
+        else:
+            for to, _m, _d in nxt:
+                walk(to)
+
+    walk(name)
+    # dedup preserving order
+    seen, uniq = set(), []
+    for x in outs:
+        if x not in seen:
+            seen.add(x)
+            uniq.append(x)
+    return uniq
+
+
+def base_form(name, evolves_from):
+    while name in evolves_from:
+        name = evolves_from[name]
+    return name
+
+
+def _list_join(items):
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    if len(items) == 2:
+        return items[0] + " and " + items[1]
+    return ", ".join(items[:-1]) + ", and " + items[-1]
+
+
 def about_answer(name, num, types, into, evolves_from):
     t = type_phrase(types)
     legend = " It is a legendary Pokemon." if name in LEGENDARIES else ""
@@ -622,24 +850,34 @@ def about_answer(name, num, types, into, evolves_from):
 class Corpus:
     def __init__(self):
         self.blocks = []  # each block is a list of lines
-        self._seen = set()  # dedup exact (question, answer) pairs
+        self._q_answer = {}  # question -> its (first) answer; enforces one answer per question
+        self.conflicts_dropped = 0
 
     def qa(self, question, answer):
-        key = (question, answer)
-        if key in self._seen:
+        # One answer per question, FIRST-write-wins. A model trained on the same
+        # question with two different answers learns to hedge/blend between them,
+        # so a later block that reuses an existing question with a DIFFERENT answer
+        # is dropped (e.g. a lore-passage phrasing that collides with the concise
+        # dedicated Q&A emitted earlier — the dedicated answer wins, and the lore
+        # is still trained as bare prose).
+        prev = self._q_answer.get(question)
+        if prev is not None:
+            if prev != answer:
+                self.conflicts_dropped += 1
             return
-        self._seen.add(key)
+        self._q_answer[question] = answer
         self.blocks.append([f"Q: {question}", f"A: {answer}"])
 
     def qa_variants(self, questions, answer):
-        # Emit each question formally AND a casual lowercase/unpunctuated variant
-        # so the model matches how people actually type. The HardwareOne gold
-        # standard is ~57% lowercase and ~75% unpunctuated; this mirrors that.
+        # ONE clean, proper-case example per phrasing. Variety comes from the
+        # multiple DISTINCT phrasings in each question list — not from mechanical
+        # lowercase/punctuation duplicates, which only bloat the corpus against a
+        # capacity-limited model (and a lowercased name fragments into subword
+        # tokens the model can't bind to the whole "Pikachu" token anyway).
+        # Casual lowercase / unpunctuated input is normalized at inference by the
+        # firmware's vocab-aware capitalization.
         for q in questions:
             self.qa(q, answer)
-            casual = q.lower().rstrip(" ?.")
-            if casual and casual != q:
-                self.qa(casual, answer)
 
     def prose(self, text):
         self.blocks.append([text])
@@ -692,6 +930,12 @@ def main():
                        f"What species is {name}?",
                        f"What is {name}'s Pokedex category?"],
                       f"{name} is the {CATEGORY[num]}.")
+        if num in DEX_ENTRY:
+            c.qa_variants([q.format(name=name) for q in DEX_ENTRY_Q], DEX_ENTRY[num])
+        if num in CATCH_LOC:
+            c.qa_variants([q.format(name=name) for q in CATCH_Q], CATCH_LOC[num])
+        c.qa_variants([q.format(num=num) for q in NUM_TO_NAME_Q],
+                      f"{name} is number {num} in the Kanto Pokedex.")
 
     # Gyms
     for order, city, leader, gtype, badge, ace in GYMS:
@@ -894,19 +1138,166 @@ def main():
                        f"How do I use {move}?"],
                       fact)
 
+    # Reverse type lookups: "list water pokemon" / "which pokemon are fire type".
+    # These are aggregate queries a tiny model can't DERIVE from the per-Pokemon
+    # type facts — it can only memorize the list verbatim, so each type-list gets
+    # many phrasings (TYPE_LIST_Q) for repeated exposure. Answer leads with the
+    # count so it's useful even if cut short. (The old ctx=43 truncation worry is
+    # gone: device context is now 128, so a full 9-name list fits comfortably.)
+    for t, names in type_to_names().items():
+        joined = ", ".join(names)
+        c.qa_variants([q.format(t=t) for q in TYPE_LIST_Q],
+                      f"There are {len(names)} {t}-type Kanto Pokemon: {joined}.")
+
     # Mechanics / general
+    for questions, answer in CAPABILITIES:
+        c.qa_variants(questions, answer)
     for questions, answer in MECHANICS:
         c.qa_variants(questions, answer)
 
-    # Prose
-    for p in PROSE:
-        c.prose(p)
+    # Lore/background: each passage is trained as bare prose (LM exposure of the
+    # text) AND bridged with "tell me about X" phrasings whose answer IS the
+    # passage — so open-ended lore questions land on the canonical paragraph
+    # instead of drifting. Bare + N phrasings gives the passage repeated exposure.
+    for questions, passage in LORE:
+        c.prose(passage)
+        c.qa_variants(questions, passage)
 
+    # ── Precomputed cross-fact "reasoning" ───────────────────────────────────
+    # A 6M model can't DERIVE these live (it would need to chain multiple facts),
+    # so we compute the answers HERE — deterministically, off the verified Gen-1
+    # chart and evolution graph — and bake them in as flat Q&A. This is the
+    # reasoning payoff: dual-type weaknesses (product of both types' multipliers,
+    # so 2x can cancel to 1x or stack to 4x), evolution-family traversal, dex
+    # neighbours, and type combos — all correct by construction.
+    into_map = _name_into()
+    evolves_from = build_evolves_from()
+    num_to_name = {num: name for num, name, _t, _i in POKEMON}
+    last_num = len(POKEMON)
+
+    def chain_desc(base):
+        into = into_map.get(base) or []
+        if not into:
+            return f"{base} does not evolve."
+        if len(into) > 1:  # Eevee-style branch
+            outs = _list_join([t for t, _m, _d in into])
+            return f"{base} can evolve into {outs} using evolution stones."
+        parts, n_ = [], base
+        while True:
+            nx = into_map.get(n_) or []
+            if not nx:
+                break
+            to, method, detail = nx[0]
+            if method == "level":
+                parts.append(f"{to} at level {detail}")
+            elif method == "stone":
+                parts.append(f"{to} with a {detail}")
+            else:
+                parts.append(f"{to} when traded")
+            n_ = to
+        return f"{base} evolves into " + ", then into ".join(parts) + "."
+
+    for num, name, types, into in POKEMON:
+        # Per-Pokemon weaknesses — the genuine two-fact reasoning (dual-type product).
+        weak4, weak2, immune, resist = defense_profile(types)
+        weaknesses = weak4 + weak2
+        if weaknesses:
+            ans = f"{name} is weak to {_list_join(weaknesses)}."
+            if weak4:
+                ans = (f"{name} is weak to {_list_join(weaknesses)}, and takes 4x "
+                       f"damage from {_list_join(weak4)}.")
+            c.qa_variants([f"What is {name} weak to?",
+                           f"What is super effective against {name}?",
+                           f"What beats {name}?",
+                           f"What should I use against {name}?"], ans)
+        if weak4:
+            c.qa_variants([f"What does 4x damage to {name}?",
+                           f"What is {name} doubly weak to?"],
+                          f"{name} takes 4x damage from {_list_join(weak4)}.")
+        if immune:
+            c.qa_variants([f"What is {name} immune to?",
+                           f"What does no damage to {name}?",
+                           f"What can't hurt {name}?"],
+                          f"{name} takes no damage from {_list_join(immune)} attacks.")
+        # Per-Pokemon offense coverage (its same-type moves' super-effective set).
+        cov = offense_coverage(types)
+        if cov:
+            c.qa_variants([f"What is {name} good against?",
+                           f"What is {name} super effective against?",
+                           f"What does {name} beat?"],
+                          f"{name}'s attacks are super effective against {_list_join(cov)} Pokemon.")
+        # Final evolution (walk the graph forward to the terminal node).
+        finals = final_forms(name, into_map)
+        fa = (f"{name} is already fully evolved." if finals == [name]
+              else f"{name}'s final evolution is {_list_join(finals)}.")
+        c.qa_variants([f"What is the final evolution of {name}?",
+                       f"What does {name} fully evolve into?",
+                       f"What is {name}'s last form?"], fa)
+        # Base form (walk backward to the root).
+        base = base_form(name, evolves_from)
+        ba = (f"{name} is a base-stage Pokemon and does not evolve from anything."
+              if base == name else f"{name}'s base form is {base}.")
+        c.qa_variants([f"What is {name}'s base form?",
+                       f"What is the first form of {name}?",
+                       f"What does {name}'s line start from?"], ba)
+        # Whole evolution family, keyed to every member.
+        cd = chain_desc(base)
+        c.qa_variants([f"Show me {name}'s evolution line.",
+                       f"What is {name}'s evolution family?",
+                       f"How does the {name} line go?"], cd)
+        # Dex neighbours.
+        if num > 1:
+            c.qa_variants([f"Who comes before {name}?",
+                           f"What Pokemon is right before {name}?"],
+                          f"Before {name} (#{num}) is {num_to_name[num-1]} (#{num-1}).")
+        if num < last_num:
+            c.qa_variants([f"Who comes after {name}?",
+                           f"What Pokemon is right after {name}?"],
+                          f"After {name} (#{num}) comes {num_to_name[num+1]} (#{num+1}).")
+
+    # Type-level resistances (now unblocked by the verified RESISTS map).
+    for t in TYPES:
+        r = RESISTS[t]
+        ans = (f"{t}-type Pokemon resist {_list_join(r)} attacks (half damage)."
+               if r else f"{t}-type Pokemon do not resist any attack type.")
+        c.qa_variants([f"What does {t} resist?",
+                       f"What is {t} resistant to?",
+                       f"What takes half damage as a {t} type?"], ans)
+
+    # Dual-type combos ("which Pokemon are Water and Ice?").
+    combos = {}
+    for _num, name, types, _into in POKEMON:
+        if len(types) == 2:
+            combos.setdefault(tuple(sorted(types)), []).append(name)
+    for (a, b), names in combos.items():
+        # emit BOTH type orderings so "Water and Ice" and "Ice and Water" both hit
+        c.qa_variants([f"Which Pokemon are {a} and {b}?",
+                       f"Which Pokemon are {b} and {a}?",
+                       f"List the {a}/{b} Pokemon.",
+                       f"What Pokemon are both {a} and {b} type?"],
+                      f"The {a}/{b} Pokemon are {_list_join(names)}.")
+
+    # Non-evolvers + first/last (small, high-answerability facts).
+    non_evolvers = [nm for _n, nm, _t, into in POKEMON if not into and nm not in evolves_from]
+    c.qa_variants(["Which Pokemon don't evolve?",
+                   "List Pokemon that never evolve.",
+                   "What Pokemon are stuck as they are?"],
+                  f"{len(non_evolvers)} Kanto Pokemon never evolve, including "
+                  f"{_list_join(non_evolvers[:12])}.")
+    c.qa_variants(["Who is the first Pokemon in the Kanto Pokedex?",
+                   "Which Pokemon starts the Pokedex?",
+                   "What is the very first Pokemon?"],
+                  f"The first Kanto Pokemon is {num_to_name[1]} (#1), and the last is "
+                  f"{num_to_name[last_num]} (#{last_num}).")
+
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.tokens_out.parent.mkdir(parents=True, exist_ok=True)
     n = c.write(args.out, seed=args.seed)
     qa_count = sum(1 for b in c.blocks if len(b) == 2)
     print(f"Wrote {args.out}")
     print(f"  blocks: {n}  (Q&A pairs: {qa_count}, prose: {n - qa_count})")
     print(f"  Pokemon: {len(POKEMON)}  gyms: {len(GYMS)}  locations: {len(LOCATIONS)}")
+    print(f"  conflicting-answer duplicates dropped: {c.conflicts_dropped} (one answer per question enforced)")
 
     # Whole-word special tokens: the 151 names, so each tokenizes atomically
     # (no partial-name fragments). Pass to a trainer with --special-tokens.

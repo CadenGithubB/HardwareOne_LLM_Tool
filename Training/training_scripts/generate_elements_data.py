@@ -7,6 +7,10 @@ from the Bowserinator Periodic-Table-JSON dataset, filtered to elements 1-118,
 families normalized, room-temp phase only asserted for naturally-occurring
 elements <=94 where it is well established).
 
+All answers are derived from elements.json or explicit GENERAL/CAPABILITIES
+tables in this file — no scraped uses, discovery dates, or hand-written facts
+per element.
+
 Usage:
     python training_scripts/generate_elements_data.py
 """
@@ -17,9 +21,55 @@ from pathlib import Path
 
 DATA = Path(__file__).parent.parent / "training_data" / "elements.json"
 
+METAL_FAMILIES = {
+    "alkali metal", "alkaline earth metal", "transition metal",
+    "post-transition metal", "lanthanide", "actinide",
+}
+NONMETAL_FAMILIES = {"nonmetal", "halogen", "noble gas"}
+
 
 def load_elements():
-    return json.loads(DATA.read_text(encoding="utf-8"))
+    els = json.loads(DATA.read_text(encoding="utf-8"))
+    if len(els) != 118:
+        raise SystemExit(f"expected 118 elements, got {len(els)}")
+    nums = [e["number"] for e in els]
+    if sorted(nums) != list(range(1, 119)):
+        raise SystemExit("elements.json must contain atomic numbers 1-118 exactly once")
+    return els
+
+
+def fam_with_article(fam):
+    """a/an before family name."""
+    if fam[0] in "aeiou":
+        return f"an {fam}"
+    return f"a {fam}"
+
+
+def fam_plural(fam):
+    return fam + ("es" if fam.endswith("s") else "s")
+
+
+def metal_class(e):
+    fam = e["family"]
+    if fam in METAL_FAMILIES:
+        return "metal"
+    if fam == "metalloid":
+        return "metalloid"
+    if fam in NONMETAL_FAMILIES:
+        return "nonmetal"
+    return fam
+
+
+def list_answer(prefix, names, max_names=6):
+    """Short list for reverse lookups; never dump 30+ names in one answer."""
+    if not names:
+        return prefix.rstrip() + " none."
+    if len(names) == 1:
+        return f"{prefix} {names[0]}."
+    if len(names) <= max_names:
+        return f"{prefix} " + ", ".join(names[:-1]) + ", and " + names[-1] + "."
+    ex = names[:max_names]
+    return f"{prefix} " + ", ".join(ex[:-1]) + ", and " + ex[-1] + ", among others."
 
 
 # ── Phrasing templates ───────────────────────────────────────────────────
@@ -57,23 +107,44 @@ ABOUT_Q = ["Tell me about {name}.", "What is {name}?", "Describe {name}.",
            "Give me info on {name}.",
            "What can you tell me about {name}?"]
 
-
-def fam_plural(fam):
-    return fam + ("es" if fam.endswith("s") else "s")
+CAPABILITIES = [
+    (["What can you do?", "What can you answer?", "What are your capabilities?",
+      "What are you capable of?"],
+     "I answer facts about the 118 elements: names, symbols, numbers, families, groups, periods, blocks, and room-temperature state."),
+    (["What questions can I ask?", "What can I ask you?", "What should I ask?",
+      "Help", "What can you help with?"],
+     "Try What is element 26, What is the symbol for Gold, or Which elements are noble gases."),
+    (["What do you know about?", "What topics do you cover?", "What is your domain?"],
+     "I know the periodic table: element properties, families, groups, periods, blocks, and phase at room temperature."),
+    (["Who are you?", "What is this model?", "What are you?"],
+     "I am a periodic table guide for the 118 known chemical elements."),
+]
 
 
 def about_answer(e):
-    base = f"{e['name']} is element {e['number']}, a {e['family']}"
-    # Skip the phase clause for noble gases (saying "a noble gas, a gas" is redundant).
+    base = f"{e['name']} is element {e['number']}, {fam_with_article(e['family'])}"
     if e["phase"] and e["family"] != "noble gas":
         base += f", and is a {e['phase'].lower()} at room temperature"
     return base + "."
 
 
+def family_answer(e):
+    return f"{e['name']} is {fam_with_article(e['family'])}."
+
+
+def metal_answer(e):
+    cls = metal_class(e)
+    if cls == "metal":
+        return f"Yes, {e['name']} is a metal."
+    if cls == "metalloid":
+        return f"{e['name']} is a metalloid, not a metal or a nonmetal."
+    return f"No, {e['name']} is a nonmetal."
+
+
 class Corpus:
     def __init__(self):
         self.blocks = []
-        self._seen = set()  # dedup exact (question, answer) pairs
+        self._seen = set()
 
     def qa(self, q, a):
         key = (q, a)
@@ -83,8 +154,6 @@ class Corpus:
         self.blocks.append([f"Q: {q}", f"A: {a}"])
 
     def qa_variants(self, qs, a):
-        # Emit each question formally AND a casual lowercase/unpunctuated variant
-        # so the model matches casual typing (HardwareOne gold standard style).
         for q in qs:
             self.qa(q, a)
             casual = q.lower().rstrip(" ?.")
@@ -127,9 +196,11 @@ def main():
                       f"Element {num} is {name}, symbol {sym}.")
         c.qa_variants([q.format(sym=sym) for q in BYSYM_Q],
                       f"{sym} is {name}, element number {num}.")
-        c.qa_variants([q.format(name=name) for q in FAM_Q],
-                      f"{name} is a {e['family']}.")
-        # group / period
+        c.qa_variants([q.format(name=name) for q in FAM_Q if "metal" not in q.lower()],
+                      family_answer(e))
+        c.qa_variants([f"Is {name} a metal?",
+                       f"Is {name} a metal or nonmetal?"],
+                      metal_answer(e))
         if e["group"]:
             c.qa_variants([f"What group is {name} in?",
                            f"What period and group is {name} in?"],
@@ -137,10 +208,9 @@ def main():
         else:
             c.qa_variants([f"What period is {name} in?"],
                           f"{name} is in period {e['period']}.")
-        # block
-        c.qa_variants([f"What block is {name} in?"],
+        c.qa_variants([f"What block is {name} in?",
+                       f"Is {name} in the {e['block']}-block?"],
                       f"{name} is in the {e['block']}-block.")
-        # phase (only where well established)
         if e["phase"]:
             c.qa_variants([f"What state is {name} at room temperature?",
                            f"Is {name} a solid, liquid, or gas?"],
@@ -154,12 +224,9 @@ def main():
     for fam, names in by_fam.items():
         c.qa_variants([f"How many {fam_plural(fam)} are there?"],
                       f"There are {len(names)} {fam_plural(fam)} among the 118 elements.")
-        if len(names) <= 7:
-            listing = ", ".join(names[:-1]) + ", and " + names[-1]
-            ans = f"The {fam_plural(fam)} are {listing}."
-        else:
-            ex = names[:6]
-            ans = f"{fam_plural(fam).capitalize()} include " + ", ".join(ex[:-1]) + ", and " + ex[-1] + "."
+        ans = list_answer(f"The {fam_plural(fam)} are", names)
+        if len(names) > 6:
+            ans = list_answer(f"{fam_plural(fam).capitalize()} include", names)
         c.qa_variants([f"Which elements are {fam_plural(fam)}?",
                        f"Name some {fam_plural(fam)}.",
                        f"Give me a {fam}.",
@@ -169,11 +236,39 @@ def main():
                        f"Show me the {fam_plural(fam)}."],
                       ans)
 
+    # ── Reverse lookups by period, group, block (from elements.json) ─────
+    by_period = {}
+    by_group = {}
+    by_block = {}
+    for e in els:
+        by_period.setdefault(e["period"], []).append(e["name"])
+        by_group.setdefault(e["group"], []).append(e["name"])
+        by_block.setdefault(e["block"], []).append(e["name"])
+    for period in sorted(by_period):
+        names = by_period[period]
+        c.qa_variants([f"Which elements are in period {period}?",
+                       f"What elements are in period {period}?",
+                       f"Name the elements in period {period}."],
+                      list_answer(f"Period {period} includes", names))
+    for group in sorted(by_group):
+        names = by_group[group]
+        c.qa_variants([f"Which elements are in group {group}?",
+                       f"What elements are in group {group}?",
+                       f"Name the elements in group {group}."],
+                      list_answer(f"Group {group} includes", names))
+    for block in sorted(by_block):
+        names = by_block[block]
+        label = f"{block}-block"
+        c.qa_variants([f"Which elements are in the {label}?",
+                       f"What elements are in the {label}?",
+                       f"Name the {label} elements."],
+                      list_answer(f"The {label} includes", names))
+
     # ── Reverse lookups by room-temp phase ────────────────────────────────
     gases = [e["name"] for e in els if e["phase"] == "Gas"]
     c.qa_variants(["Which elements are gases at room temperature?",
                    "Name the gaseous elements."],
-                  "The gaseous elements are " + ", ".join(gases[:-1]) + ", and " + gases[-1] + ".")
+                  list_answer("The gaseous elements are", gases, max_names=8))
     c.qa_variants(["Which elements are liquid at room temperature?",
                    "Name the liquid elements.",
                    "What elements are liquids?"],
@@ -187,6 +282,10 @@ def main():
     for g, desc in GROUPS:
         c.qa_variants([f"What is {g}?", f"What family is {g}?"],
                       f"{g.capitalize()} is {desc}.")
+
+    # ── Capabilities / help ───────────────────────────────────────────────
+    for qs, a in CAPABILITIES:
+        c.qa_variants(qs, a)
 
     # ── General facts ─────────────────────────────────────────────────────
     GENERAL = [
@@ -226,14 +325,6 @@ def main():
     print(f"Wrote {args.out}")
     print(f"  blocks: {n}  (Q&A: {qa}, prose: {n - qa})  elements: {len(els)}")
 
-    # Special tokens: element names + multi-letter symbols (single-letter
-    # symbols are already atomic and risk matching inside words).
-    # NAMES ONLY. Symbols are intentionally excluded: 24 of them (At, In, As,
-    # No, Be, He, Ne, Na, Si, Co, Ti, Sc, Re, Os, Po, Pa, Pb, Sb, Am, Ar, Cs,
-    # Md, Pm, Ds) are also common English words and, as special tokens, would
-    # hijack those words throughout the corpus (e.g. "At room temperature" ->
-    # the Astatine token). HardwareOne's special tokens are long lowercase
-    # commands precisely to avoid this kind of collision.
     names = [e["name"] for e in els]
     header = ("# Element names only, kept whole by the tokenizer so long names\n"
               "# don't fragment. Symbols are EXCLUDED on purpose: many collide\n"
