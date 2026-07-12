@@ -20,8 +20,8 @@ FOUR WAYS TO GET A MODEL
   C) Example training package
      Unzip a package from:
        Training Material + Pre-trained Models/Training Materials/
-     Each zip is self-contained (trainers + training_data/ + scripts + instructions).
-     Unzip anywhere, cd into it, and train from there.
+     Each data zip contains only training_data/ with the topic's data files. Unzip
+     it, then train with the canonical trainer in this training/ folder (STEP 3).
 
   D) Build your own on ANY topic, AI-assisted (easiest custom model)
      Use the template kit at:
@@ -39,10 +39,9 @@ FOUR WAYS TO GET A MODEL
 STEP 1 — Install dependencies (once)
 --------------------------------------
 
-For Path B, run from this training/ folder. For Path C, run from inside the
-unzipped package (it includes its own copy of requirements.txt).
+All paths share one dependency file. From the repo root:
 
-    pip install -r requirements.txt
+    pip install -r Training/requirements.txt
 
 On GPU machines, install PyTorch for your CUDA version first:
 
@@ -68,17 +67,17 @@ PATH B — Roll your own data
     - If your domain has multi-word terms or commands that must tokenize as one
       unit, list them one-per-line in a file and pass --special-tokens that_file.
 
-  Need a format reference? Each training package zip includes training_data/
-  template.txt — unzip any package and copy that file as a starting point.
+  Need a format reference? Copy Training/template.txt as a starting point.
 
-PATH C — Use a shipped example package
-  1. Pick a zip from Training Material + Pre-trained Models/Training Materials/
+PATH C — Use a shipped example data package
+  1. Pick a data zip from Training Material + Pre-trained Models/Training Materials/
      (HardwareOne Help Agent, Kanto Pokemon Master, or Periodic Table Guide).
   2. Unzip it, e.g.:
-         unzip hardwareone_training_package.zip -d my_model && cd my_model
-  3. The package already contains training_data/, trainers, and validation scripts.
-     Follow the train commands in that package's INSTRUCTIONS.txt or the catalog
-     README at Training Material + Pre-trained Models/Training Materials/README.md.
+         unzip kanto_pokemon_master_training_package.zip -d my_model
+  3. The zip contains only training_data/ with the topic's data files. Train it with
+     the trainer in this training/ folder (STEP 3). For the exact commands see this
+     Training/INSTRUCTIONS.txt or the catalog README at
+     Training Material + Pre-trained Models/Training Materials/README.md.
 
 PATH A — Skip this step entirely if you only want a pre-trained .bin.
 
@@ -89,27 +88,27 @@ STEP 3 — Train the model (Path B or C)
 Use HW1HelpAgent192_deep for best quality: 16 layers, dim=192, 6 heads, FFN=512,
 seq=128. (The preset names are historical labels; they work for any domain.)
 
-PATH B example (your own files, run from training/):
+PATH B example (your own files, run from the repo root):
 
-    python train_tiny_model_gpu.py \
+    python Training/train_tiny_model_gpu.py \
         --preset HW1HelpAgent192_deep \
         --text /path/to/YOUR_DATA.txt \
         --qa-test-prompts /path/to/YOUR_TEST_PROMPTS.txt \
         --epochs 250 --lr 3e-4 --batch-size 16 \
         --out ./out_mymodel
 
-PATH C example (unzipped HardwareOne package, run from inside the unzip dir):
+PATH C example (unzipped Kanto data package, run from the repo root):
 
-    python train_tiny_model_gpu.py \
+    python Training/train_tiny_model_gpu.py \
         --preset HW1HelpAgent192_deep \
-        --text training_data/hardwareone_rich.txt \
-        --special-tokens training_data/hardwareone_special_tokens.txt \
+        --text my_model/training_data/pokemon_kanto.txt \
+        --special-tokens my_model/training_data/pokemon_special_tokens.txt \
         --epochs 250 --lr 3e-4 --batch-size 16 \
-        --out ./out_HW1HelpAgent192_deep
+        --out ./out_kanto
 
 CPU training (slow, use only if no GPU available):
 
-    python train_tiny_model.py \
+    python Training/train_tiny_model.py \
         --preset HW1HelpAgent192_deep \
         --text <your-data.txt> \
         --epochs 400 --batch-size 8 --lr 3e-4 \
@@ -129,7 +128,7 @@ words gets a fixed refusal instead of a hallucinated answer. Pass
 
 To check model size before training:
 
-    python train_tiny_model_gpu.py --preset HW1HelpAgent --estimate-only
+    python Training/train_tiny_model_gpu.py --preset HW1HelpAgent --estimate-only
 
 
 STEP 4 — Convert to model.bin (browser tool)
@@ -182,11 +181,12 @@ WHAT LIVES WHERE
       Use Path B: point --text at your own .txt file.
 
   Training Material + Pre-trained Models/Training Materials/
-      Self-contained .zip packages (Path C). Each unzip dir has:
-          training_data/     data files + template.txt + special-tokens files
-          train_tiny_model*.py
-          training_scripts/  validators and analysis tools
-          INSTRUCTIONS.txt
+      Data-only .zip packages (Path C). Each unzip dir has just:
+          training_data/     corpus .txt + <name>_special_tokens.txt +
+                             <name>_test_prompts.txt + topic data (e.g. elements.json)
+      Train them with the trainer in this training/ folder (STEP 3). All three
+      example packages are data-only; the HardwareOne one is just a corpus +
+      special-tokens file (no test-prompts).
 
       build_your_own_model/  Template kit (Path D). Hand it to an AI with a topic
           and it writes the whole data generator for you; it emits the corpus only,
@@ -196,7 +196,7 @@ WHAT LIVES WHERE
   Training Material + Pre-trained Models/Trained + Ready Models/
       Pre-trained model.bin files (Path A). Copy straight to the device.
 
-  training_scripts/  (in this repo)
+  Training/training_scripts/  (in this repo)
       run_all_checks.py                 Run all data quality checks at once
       deep_error_analysis.py            12-check structural and content analysis
       validate_training_data.py         Format and command validation

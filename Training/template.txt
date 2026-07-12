@@ -1,0 +1,38 @@
+# ============================================================================
+# TRAINING DATA TEMPLATE — replace everything below with your own data.
+# ============================================================================
+#
+# This file shows the three block types the trainer understands. Blocks are
+# separated by a BLANK LINE. Lines starting with # are NOT special to the
+# trainer — delete these comments before training (or leave them; they become
+# prose). For a clean dataset, remove this whole header.
+#
+# 1) Q&A pair  — a question and a short answer (keep answers ~<30 words so a
+#    full pair fits the model's context window).
+# 2) Q&A → Do — a question paired with a single command/action to suggest.
+#    Only useful if your agent drives something with named commands.
+# 3) Prose    — a standalone paragraph of background context.
+#
+# Reinforce each fact with several phrasings of the question pointing at the
+# same answer — tiny models memorize better with repetition.
+#
+# If your domain has multi-word terms or commands that must stay whole in the
+# tokenizer (e.g. "openvalve", "Kanto Pokemon Master"), list them one-per-line
+# in a file and pass it with:  --special-tokens my_tokens.txt
+# ----------------------------------------------------------------------------
+
+Q: What is this project?
+A: Replace this with a real answer about your own subject.
+
+Q: Tell me about this project.
+A: Replace this with a real answer about your own subject.
+
+Q: How do I start the thing?
+Do: startcommand
+
+Q: Turn the thing off.
+Do: stopcommand
+
+This is a prose passage. Use it for background context that doesn't fit a
+single question and answer. Write a few of these to describe your domain, then
+add many Q&A pairs covering the specific facts you want the model to recall.

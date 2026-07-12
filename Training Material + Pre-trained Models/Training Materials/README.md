@@ -1,14 +1,16 @@
 # Training Materials Catalog
 
 A catalog of **training packages** for the on-device LLM models built with this
-tool. Each package is a self-contained zip with the training data, trainers, validation
-scripts, and instructions needed to reproduce a model from scratch.
+tool. Each package is a zip of just the `training_data/` needed to reproduce a model —
+the corpus, special-tokens, test-prompts, and any topic data. The trainers,
+validation scripts, and the single guide live once in `Training/` and are shared
+across every package.
 
 > **The main repo `training/` folder does not ship example data.** Either
 > write your own dataset and train with the repo trainers (see
 > [`training/INSTRUCTIONS.txt`](../../training/INSTRUCTIONS.txt)), grab a
 > pre-trained `.bin` from [`../Trained + Ready Models/`](../Trained%20+%20Ready%20Models/),
-> unzip one of the packages below and train from inside the unzip directory, or
+> unzip one of the data packages below and train it with a repo trainer, or
 > use the [`build_your_own_model/`](build_your_own_model/) kit to have an AI
 > generate a package for any topic (see next section).
 
@@ -28,10 +30,11 @@ topic no package covers. Every package below is built from these same patterns.
 
 ## How to use a package
 
-1. Unzip it anywhere — the zip is fully self-contained (trainers + `training_data/` + scripts):
-   `unzip <package>.zip -d my_model && cd my_model`
-2. `pip install -r requirements.txt` (add a CUDA build of torch for GPU training)
-3. Train with the command in that package's `INSTRUCTIONS.txt` / the notes below.
+1. Unzip it anywhere — you get a `training_data/` folder (corpus, special-tokens,
+   test-prompts, and any topic data):
+   `unzip <package>.zip -d my_model`
+2. `pip install -r Training/requirements.txt` (add a CUDA build of torch for GPU training)
+3. Train with the canonical `Training/` trainer, using the command in `Training/INSTRUCTIONS.txt` or the notes below.
    After it saves the model, the trainer also extracts a domain word-list from the
    corpus and writes it as `domain_vocab.txt` in the output folder (pass
    `--no-domain-vocab` to skip; build or tune one by hand with
@@ -78,7 +81,7 @@ python train_tiny_model_gpu.py \
 
 ### Kanto Pokemon Master
 A knowledge agent for the original 151 Pokémon and the Kanto region. The data is
-**generated** from a single fact table (`training_scripts/generate_pokemon_data.py`)
+**generated** from a single fact table (`Training/training_scripts/generate_pokemon_data.py`)
 so facts never contradict across phrasings. Covers, per Pokémon: type, Pokédex number, category, **Pokedex entry text**,
 evolution (method + level/stone/trade), **where to catch in Kanto**, reverse
 dex lookup ("what Pokemon is #25?"), and "about". Plus capability/help Q&A
@@ -88,16 +91,16 @@ and mechanics.
 
 All Gen-1 authentic (no abilities/held items; Clefairy/Jigglypuff/Mr. Mime are
 Normal/Psychic, Magnemite is Electric). Types and evolutions were **verified
-against PokéAPI for all 151** via `training_scripts/verify_pokemon_data.py`.
+against PokéAPI for all 151** via `Training/training_scripts/verify_pokemon_data.py`.
 Tokenizer reaches ~2,315 of the 3,072 BPE budget (151 names kept whole + subwords).
 
 Train:
 ```bash
-python train_tiny_model_gpu.py \
+python Training/train_tiny_model_gpu.py \
     --preset HW1HelpAgent192_deep \
-    --text training_data/pokemon_kanto.txt \
-    --special-tokens training_data/pokemon_special_tokens.txt \
-    --qa-test-prompts training_data/pokemon_test_prompts.txt \
+    --text my_model/training_data/pokemon_kanto.txt \
+    --special-tokens my_model/training_data/pokemon_special_tokens.txt \
+    --qa-test-prompts my_model/training_data/pokemon_test_prompts.txt \
     --epochs 250 --lr 3e-4 --batch-size 16 \
     --out ./out_kanto_pokemon_master
 ```
@@ -111,7 +114,7 @@ When converted, name the deployable model `KantoPokemonMaster.bin` in
 ### Periodic Table Guide
 A knowledge agent for the 118 chemical elements. Generated from a single fact
 table (`training_data/elements.json`, derived from the Bowserinator
-Periodic-Table-JSON dataset) by `training_scripts/generate_elements_data.py`.
+Periodic-Table-JSON dataset) by `Training/training_scripts/generate_elements_data.py`.
 Covers, per element: atomic number, symbol (both directions), family, group and
 period, block, metal/nonmetal classification, and room-temp state — plus reverse
 lookups by family, period, group, and block; gases/liquids at room temperature;
@@ -127,11 +130,11 @@ element names are kept whole (symbols excluded to avoid English word collisions)
 
 Train:
 ```bash
-python train_tiny_model_gpu.py \
+python Training/train_tiny_model_gpu.py \
     --preset HW1HelpAgent192_deep \
-    --text training_data/elements_rich.txt \
-    --special-tokens training_data/elements_special_tokens.txt \
-    --qa-test-prompts training_data/elements_test_prompts.txt \
+    --text my_model/training_data/elements_rich.txt \
+    --special-tokens my_model/training_data/elements_special_tokens.txt \
+    --qa-test-prompts my_model/training_data/elements_test_prompts.txt \
     --epochs 250 --lr 3e-4 --batch-size 16 --compile \
     --out ./out_periodic_table
 ```
@@ -143,7 +146,7 @@ When converted, name the deployable model `PeriodicTableGuide.bin` in
 
 ## Adding a new model to the catalog
 
-1. Build the training-data package zip (`training_data/` + `requirements.txt` + INSTRUCTIONS) — the trainers and scripts stay in `Training/`.
+1. Build the training-data package zip — just `training_data/` (corpus, special-tokens, test-prompts, and any topic data). The trainers, scripts, `requirements.txt`, and `INSTRUCTIONS.txt` stay in `Training/`.
 2. Create a `kebab-case/` subfolder here and drop the zip inside.
 3. Add a row to the **Catalog** table and a short **Model notes** section above.
 4. When the `.bin` is trained, place it in `../Trained + Ready Models/` and link it.
