@@ -58,6 +58,7 @@ topic no package covers. Every package below is built from these same patterns.
 | **HardwareOne Help Agent** | HardwareOne ESP32-S3 firmware help (Q&A + `Do:` CLI command suggestions) | HW1HelpAgent192_deep (~7.5 MB INT8) | ~890 Q&A + 1,123 `Do:` pairs, 27 topics | [`HardwareOneHelpAgent.bin`](../Trained%20+%20Ready%20Models/HardwareOneHelpAgent.bin) (6.5 MB) | [`hardwareone-help-agent/`](hardwareone-help-agent/hardwareone_training_package.zip) |
 | **Kanto Pokemon Master** | Generation-1 / Kanto knowledge: the original 151 Pokémon + the Kanto region (pure knowledge Q&A) | HW1HelpAgent192_deep (~7.5 MB INT8) | 5,825 Q&A + 9 prose | _not yet trained_ | [`kanto-pokemon-master/`](kanto-pokemon-master/kanto_pokemon_master_training_package.zip) |
 | **Periodic Table Guide** | The 118 chemical elements: number, symbol, family, group/period, room-temp state (pure knowledge Q&A) | HW1HelpAgent192_deep (~7.5 MB INT8) | 10,000 Q&A + 3 prose | _not yet trained_ | [`periodic-table-guide/`](periodic-table-guide/periodic_table_guide_training_package.zip) |
+| **World Pop Culture** | Worldwide music, film, sports, business, and media figures, plus companies, platforms, leagues/awards, and world cities and countries (pure knowledge Q&A) | HW1HelpAgent192_deep (~7.5 MB INT8) | 2,174 Q&A + 4 prose | _not yet trained_ | [`pop-culture-guide/`](pop-culture-guide/pop_culture_training_package.zip) |
 
 ---
 
@@ -140,6 +141,35 @@ python Training/train_tiny_model_gpu.py \
 ```
 
 When converted, name the deployable model `PeriodicTableGuide.bin` in
+`../Trained + Ready Models/`.
+
+### World Pop Culture
+A knowledge agent for world pop culture. **Generated** from a single fact table
+(`Training/training_scripts/generate_pop_culture_data.py`) so facts never contradict
+across phrasings. Covers ~82 famous people (musicians, actors and directors,
+athletes across 10 sports, business and media figures) with profession, field,
+primary genre/sport, and home country; plus 13 companies, 10 platforms, 9
+leagues/awards, music genres and sports, and 26 world cities and countries
+(continent, and each country's capital). Includes reverse lookups by field, role,
+genre, sport, and country/continent. All 185 proper nouns are kept whole in the
+tokenizer so names, places, and companies never fragment.
+
+**STARTER data:** pop culture is open and fast-changing, so this uses only
+rock-stable facts (profession, genre/sport, nationality, capitals) - verify
+against a current source before training.
+
+Train:
+```bash
+python Training/train_tiny_model_gpu.py \
+    --preset HW1HelpAgent192_deep \
+    --text my_model/training_data/pop_culture_rich.txt \
+    --special-tokens my_model/training_data/pop_culture_special_tokens.txt \
+    --qa-test-prompts my_model/training_data/pop_culture_test_prompts.txt \
+    --epochs 250 --lr 3e-4 --batch-size 16 --vocab-size 3072 \
+    --out ./out_pop_culture
+```
+
+When converted, name the deployable model `WorldPopCulture.bin` in
 `../Trained + Ready Models/`.
 
 ---
