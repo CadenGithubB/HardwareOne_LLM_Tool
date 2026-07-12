@@ -6,8 +6,8 @@ a model.bin that runs on the ESP32-S3 (8 MB PSRAM). The model is DOMAIN-AGNOSTIC
 you supply the knowledge. The training/ folder in this repo ships trainers and
 validation tools — not example data.
 
-THREE WAYS TO GET A MODEL
---------------------------
+FOUR WAYS TO GET A MODEL
+-------------------------
 
   A) Pre-trained model (fastest)
      Download a ready .bin from:
@@ -22,6 +22,18 @@ THREE WAYS TO GET A MODEL
        Training Material + Pre-trained Models/Training Materials/
      Each zip is self-contained (trainers + training_data/ + scripts + instructions).
      Unzip anywhere, cd into it, and train from there.
+
+  D) Build your own on ANY topic, AI-assisted (easiest custom model)
+     Use the template kit at:
+       Training Material + Pre-trained Models/Training Materials/build_your_own_model/
+     Hand the folder to an AI (Claude, ChatGPT, ...) with any topic you want. Per
+     that folder's BUILD_YOUR_OWN_MODEL.md, the AI fills in a generator that emits
+     a full, correct training corpus for the topic — facts under many phrasings,
+     reverse/aggregate lookups, precomputed reasoning, and lore. The kit
+     generates the data only; once the corpus is written, train it with the
+     trainer in this training/ folder (STEP 3). No hand-writing a dataset
+     (Path B) and no waiting for a shipped package (Path C) — just describe the
+     topic.
 
 
 STEP 1 — Install dependencies (once)
@@ -109,6 +121,12 @@ Loss should fall from ~7 down to ~0.1-0.3. After training, the script runs a
 generation test. Pass --qa-test-prompts (a file of "Q: ..." lines) so the test
 asks questions from YOUR domain; otherwise it uses a generic placeholder.
 
+After saving the model, both trainers auto-extract a domain word-list from your
+corpus and write it as domain_vocab.txt into the --out folder. This drives the
+on-device refusal gate (see STEP 4): a prompt that mentions none of your domain's
+words gets a fixed refusal instead of a hallucinated answer. Pass
+--no-domain-vocab to skip writing the list.
+
 To check model size before training:
 
     python train_tiny_model_gpu.py --preset HW1HelpAgent --estimate-only
@@ -125,7 +143,14 @@ STEP 4 — Convert to model.bin (browser tool)
 
 4c. Select INT8 quantization, group size 128. These are the defaults.
 
-4d. Click Convert. When finished, click Download. This saves model.bin.
+4d. Domain refusal gate (optional). If the dropped folder contains a
+    domain_vocab.txt, the converter auto-loads it into the "Domain words" field;
+    you can also pick a list with the manual "Domain words" file input and set a
+    "Refusal answer". With both set, the device refuses any prompt that contains
+    none of the domain words, replying with the Refusal answer instead of
+    guessing. Clear both fields to disable the gate.
+
+4e. Click Convert. When finished, click Download. This saves model.bin.
 
 
 STEP 5 — Copy to device
@@ -163,6 +188,11 @@ WHAT LIVES WHERE
           training_scripts/  validators and analysis tools
           INSTRUCTIONS.txt
 
+      build_your_own_model/  Template kit (Path D). Hand it to an AI with a topic
+          and it writes the whole data generator for you; it emits the corpus only,
+          then train it with the trainer in this training/ folder. Start at its
+          BUILD_YOUR_OWN_MODEL.md.
+
   Training Material + Pre-trained Models/Trained + Ready Models/
       Pre-trained model.bin files (Path A). Copy straight to the device.
 
@@ -171,6 +201,7 @@ WHAT LIVES WHERE
       deep_error_analysis.py            12-check structural and content analysis
       validate_training_data.py         Format and command validation
       topic_coverage_report.py          Count QA pairs per topic
+      extract_domain_vocab.py           Build or tune a domain word-list by hand
       ... (plus other analysis tools)
 
 Note: The GPU trainer masks question tokens during training (only answer tokens
