@@ -9,3 +9,5 @@ trainer_ckpt/
 # Trained model output folders + their zips (regenerate by training)
 /out_*/
 /out_*.zip
+# Unzipped working copies of the data packages — the .zip is the tracked data form
+*_training_package/
