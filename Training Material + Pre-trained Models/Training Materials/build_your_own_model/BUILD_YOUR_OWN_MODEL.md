@@ -147,6 +147,29 @@ let it terminate naturally rather than hard-capping length.
 
 ---
 
+## Guided-input menu (optional, automatic)
+
+`TEMPLATE.py` also emits a `menu_manifest.json` next to your corpus, built from
+the SAME `ENTITIES` / `ATTRIBUTE_QUESTIONS` / `REVERSE_LOOKUPS` / `LORE` you
+already filled in: the FIRST phrasing of each question list becomes a menu
+template with a single `{}` entity slot, and your entity names become the
+roster. On the device this drives a "pick a question" menu (group → question →
+entity) so users don't have to type — and because each template is your
+canonical phrasing, every composed question is one the model trained on verbatim.
+
+- Nothing extra to do: a normal `TEMPLATE.py` run writes `menu_manifest.json`
+  beside `corpus.txt`. Pass `--menu-only` to regenerate JUST the menu (the corpus
+  and tokens are left untouched), or `--menu-out <path>` to redirect it.
+- The trainer copies `menu_manifest.json` into `--out` automatically when it sits
+  next to the corpus (or pass `--menu <path>`), so the browser converter
+  auto-loads it exactly like `domain_vocab.txt`.
+- Caps (the converter and firmware also enforce them): ≤8 groups, ≤64
+  templates and ≤1024 entities per group, group name ≤32 B, question ≤120 B,
+  entity ≤48 B. A template has at most one `{}` slot; a slotless template is a
+  canned question. No menu is fine — the device just falls back to free-text.
+
+---
+
 ## How much data?
 
 - **Small topic** (tens of entities): a few hundred to ~2,000 facts. Lean on

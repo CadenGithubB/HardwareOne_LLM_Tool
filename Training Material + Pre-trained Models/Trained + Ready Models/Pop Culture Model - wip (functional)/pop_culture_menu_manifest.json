@@ -1,0 +1,208 @@
+{
+  "menu_version": 1,
+  "groups": [
+    {
+      "name": "People",
+      "templates": [
+        {
+          "q": "Who is {}?",
+          "label": "About {}"
+        },
+        {
+          "q": "What does {} do?",
+          "label": "{}'s job"
+        },
+        {
+          "q": "What field is {} in?",
+          "label": "{}'s field"
+        },
+        {
+          "q": "Where is {} from?",
+          "label": "{} is from?"
+        },
+        {
+          "q": "What is {} known for?",
+          "label": "{} known for?"
+        }
+      ],
+      "entities": [
+        "Taylor Swift",
+        "Beyonce",
+        "Drake",
+        "Kendrick Lamar",
+        "Billie Eilish",
+        "Rihanna",
+        "Bruno Mars",
+        "Adele",
+        "Ariana Grande",
+        "The Weeknd",
+        "Jay-Z",
+        "Snoop Dogg",
+        "Dolly Parton",
+        "Post Malone",
+        "SZA",
+        "Olivia Rodrigo",
+        "Ed Sheeran",
+        "Dua Lipa",
+        "Bad Bunny",
+        "Shakira",
+        "Eminem",
+        "Justin Bieber",
+        "Lady Gaga",
+        "Elton John",
+        "Bruce Springsteen",
+        "Stevie Wonder",
+        "Usher",
+        "Coldplay",
+        "Tom Hanks",
+        "Meryl Streep",
+        "Denzel Washington",
+        "Zendaya",
+        "Leonardo DiCaprio",
+        "Morgan Freeman",
+        "Scarlett Johansson",
+        "Robert Downey Jr.",
+        "Dwayne Johnson",
+        "Jennifer Lawrence",
+        "Will Smith",
+        "Viola Davis",
+        "Kevin Hart",
+        "Brad Pitt",
+        "Margot Robbie",
+        "Ryan Reynolds",
+        "Cate Blanchett",
+        "Samuel L. Jackson",
+        "Steven Spielberg",
+        "Christopher Nolan",
+        "Martin Scorsese",
+        "LeBron James",
+        "Stephen Curry",
+        "Michael Jordan",
+        "Shaquille O'Neal",
+        "Kevin Durant",
+        "Serena Williams",
+        "Novak Djokovic",
+        "Rafael Nadal",
+        "Roger Federer",
+        "Tom Brady",
+        "Patrick Mahomes",
+        "Lionel Messi",
+        "Cristiano Ronaldo",
+        "Kylian Mbappe",
+        "Simone Biles",
+        "Tiger Woods",
+        "Usain Bolt",
+        "Michael Phelps",
+        "Lewis Hamilton",
+        "Shohei Ohtani",
+        "Elon Musk",
+        "Jeff Bezos",
+        "Mark Zuckerberg",
+        "Bill Gates",
+        "Tim Cook",
+        "Warren Buffett",
+        "Sam Altman",
+        "Jensen Huang",
+        "Oprah Winfrey",
+        "Jimmy Fallon",
+        "MrBeast"
+      ]
+    },
+    {
+      "name": "Categories",
+      "templates": [
+        {
+          "q": "Which famous people are in {}?",
+          "label": "People in {}"
+        }
+      ],
+      "entities": [
+        "business",
+        "film",
+        "media",
+        "music",
+        "sports"
+      ]
+    },
+    {
+      "name": "Places",
+      "templates": [
+        {
+          "q": "What is {}?",
+          "label": "About {}"
+        },
+        {
+          "q": "What continent is {} in?",
+          "label": "{}'s continent"
+        }
+      ],
+      "entities": [
+        "New York",
+        "Los Angeles",
+        "London",
+        "Paris",
+        "Tokyo",
+        "Rome",
+        "Sydney",
+        "Toronto",
+        "Rio de Janeiro",
+        "Dubai",
+        "Cairo",
+        "Mumbai",
+        "United States",
+        "Canada",
+        "Mexico",
+        "England",
+        "France",
+        "Italy",
+        "Germany",
+        "Spain",
+        "Japan",
+        "China",
+        "India",
+        "Brazil",
+        "Australia",
+        "Egypt"
+      ]
+    },
+    {
+      "name": "General",
+      "templates": [
+        {
+          "q": "What can you do?"
+        },
+        {
+          "q": "Tell me about social media."
+        },
+        {
+          "q": "Tell me about streaming."
+        },
+        {
+          "q": "What is an influencer?"
+        },
+        {
+          "q": "What is a continent?"
+        },
+        {
+          "q": "What is the NBA?"
+        },
+        {
+          "q": "What is the NFL?"
+        },
+        {
+          "q": "What are the Grammys?"
+        },
+        {
+          "q": "What are the Oscars?"
+        },
+        {
+          "q": "What are the Olympics?"
+        },
+        {
+          "q": "What is the World Cup?"
+        }
+      ],
+      "entities": []
+    }
+  ]
+}

@@ -39,7 +39,12 @@ See `training/INSTRUCTIONS.txt` for the full walkthrough. Summary below.
 
 ### Path A — Deploy a pre-trained model
 
-1. Download a `.bin` from [`Trained + Ready Models/`](Training%20Material%20%2B%20Pre-trained%20Models/Trained%20%2B%20Ready%20Models/) (e.g. `HardwareOneHelpAgent.bin`)
+> **Note:** The included `.bin` files are older, known-working builds. The
+> converter, generators, training packages, and guided-menu support have been
+> updated since they were trained. The binaries have intentionally not been
+> retrained, so they may not contain the latest data or guided menus.
+
+1. Download a `.bin` from [`Trained + Ready Models/`](Training%20Material%20%2B%20Pre-trained%20Models/Trained%20%2B%20Ready%20Models/) (for example, `HardwareOneHelpAgent.bin`)
 2. Copy it to `/sd/llm/` on the SD card (or upload via the web Files page)
 3. Load from the LLM tab or CLI: `llm load /sd/llm/HardwareOneHelpAgent.bin`
 
@@ -118,9 +123,9 @@ Copy `model.bin` to `/sd/llm/` on the SD card or upload via the web Files page. 
 
 1. Pick a package from [`Training Materials/`](Training%20Material%20%2B%20Pre-trained%20Models/Training%20Materials/) (HardwareOne Help Agent, Kanto Pokemon Master, Periodic Table Guide)
 2. Unzip it anywhere, e.g. `unzip hardwareone_training_package.zip -d my_model && cd my_model`
-3. The zip is self-contained — it includes trainers, `training_data/`, validation scripts, and `INSTRUCTIONS.txt`
-4. `pip install -r requirements.txt` (add a CUDA build of torch for GPU training)
-5. Train using the command in that package's `INSTRUCTIONS.txt` or the [catalog README](Training%20Material%20%2B%20Pre-trained%20Models/Training%20Materials/README.md)
+3. The zip contains that model's `training_data/`; trainers and shared tools remain in this repository's `Training/` folder
+4. `pip install -r Training/requirements.txt` (add a CUDA build of torch for GPU training)
+5. Train using the command in the [catalog README](Training%20Material%20%2B%20Pre-trained%20Models/Training%20Materials/README.md)
 6. Convert with `index.html` (repo root) and deploy as in Path B
 
 ---

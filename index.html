@@ -414,8 +414,30 @@
           placeholder="e.g. I can only answer Pokédex questions."
           style="flex:1;min-width:200px;font:inherit;padding:6px 8px;">
       </div>
+      <div style="display:flex;align-items:flex-start;gap:8px;margin-top:12px;
+                  padding:10px 12px;border:1px solid var(--border);border-radius:6px;">
+        <input type="checkbox" id="model-command-mode" style="margin-top:3px;">
+        <label for="model-command-mode" style="font-size:12px;line-height:1.5;max-width:52em;">
+          <strong>May suggest runnable device commands</strong> (Do: mode).<br>
+          Tick this ONLY for a model trained on Hardware One's own command
+          vocabulary. It tells the firmware the model's answers may be offered to
+          the user as a command with a RUN button. A model that has never seen the
+          command set cannot know a real one, so it will invent something that
+          looks right &mdash; which is worse than refusing, because it stays
+          plausible until it runs. Leave unticked for every general-knowledge
+          model.
+        </label>
+      </div>
       <p style="font-size:11px;color:var(--muted);margin:8px 0 0;line-height:1.5;max-width:52em;">
         <strong>Domain words</strong> (optional): one word per line (from <code>extract_domain_vocab.py</code>). When provided, the device refuses any prompt containing none of these words, replying with the <strong>Refusal answer</strong>. Leave both empty to disable the gate.
+      </p>
+      <div class="settings-row" style="margin-top:10px;align-items:center;">
+        <label for="model-menu">Menu manifest</label>
+        <input type="file" id="model-menu" accept=".json,application/json" style="flex:1;min-width:180px;">
+        <span id="model-menu-count" style="font-size:12px;color:var(--muted);"></span>
+      </div>
+      <p style="font-size:11px;color:var(--muted);margin:8px 0 0;line-height:1.5;max-width:52em;">
+        <strong>Menu manifest</strong> (optional): a <code>menu_manifest.json</code> from the generator, giving on-device guided-ask groups / templates / entities baked into the <code>.bin</code>. Auto-loaded from the model folder when present; a manual pick overrides it.
       </p>
     </div>
   </div>
@@ -684,63 +706,127 @@ const QUANT   = { F32: 0, INT8: 1 };
 /** Exposed for console diagnostics from the app script */
 window.__LLM1_FORMAT = { MAGIC, QUANT };
 
-function buildOutputBin({ config, tokBuf, embedData, posEmbedData, layers, finalNorm, finalNormBias, lmHead, quantType, groupSize, tokenizer, description, iconBits, refusal, vocabWords }) {
+function buildOutputBin({ config, tokBuf, embedData, posEmbedData, layers, finalNorm, finalNormBias, lmHead, quantType, groupSize, tokenizer, description, iconBits, refusal, vocabWords, menu, commandMode }) {
   console.group('[format] buildOutputBin');
   console.log('config:', config, 'quantType:', quantType, 'groupSize:', groupSize);
   const fileVersion = 2;
   const parts = [];
 
-  // Optional info block (description + icon) — sits between the 64-byte header and
-  // the tokenizer. Signaled by a uint32 length written at header offset 24, a
-  // version-independent free-pad field. file_version STAYS 2: bumping it would
-  // opt into the v3 weight layout (per-tensor prefix bytes) the device expects but
-  // we don't write. 0 = no block. Mirrors the tokenizer's uint32-length idiom so a
-  // reader can skip it without understanding it.
-  const descBytes = new TextEncoder().encode((description || '').slice(0, 255));
-  const hasIcon   = iconBits instanceof Uint8Array && iconBits.length === 128;
+  // ── Info block v2 (TLV) ──────────────────────────────────────────────────
+  // Sits between the 64-byte header and the tokenizer; its TOTAL length is the
+  // uint32 at header offset 24 (a version-independent free-pad field, 0 = none).
+  // file_version STAYS 2 — bumping it opts into a v3 weight layout the device
+  // expects but we don't write. Only the info-block CONTENT changed to a
+  // self-describing TLV so new sections can be appended: the v1 positional
+  // layout let the firmware read the domain vocab as infoEnd-pos, which blocked
+  // anything after it. Layout (§3 of the guided-menu spec):
+  //   u16LE sentinel 0x4932   ; legacy v1 opened with desc_len ≤255 (hi byte 0),
+  //                           ; so any value ≥0x0100 is unambiguously v2
+  //   u8    section_count
+  //   section_count × [u8 id][u32LE len][payload]   ; 1=DESC 2=ICON 3=DOMAIN 4=MENU 5=CAPS
+  // Inner payload encodings are preserved from v1 so the firmware field parsers
+  // are reused; only the per-section framing is new.
+  const enc = new TextEncoder();
 
-  // Domain refusal gate (optional, appended AFTER the icon): a refusal answer +
-  // a lowercased allow-list of domain words. On device, a prompt containing none
-  // of these words is refused instead of generated. Words are lowercased/deduped
-  // in the UI layer; here we just length-prefix and pack them.
-  const refusalBytes = new TextEncoder().encode((refusal || '').slice(0, 255));
+  // DESC (1): raw UTF-8 (≤255 B).
+  const descBytes = enc.encode((description || '').slice(0, 255));
+
+  // ICON (2): u8 fmt (1 = 1bpp MSB-first row-major) + u8 w + u8 h + u16LE icon_len + 128 B bitmap.
+  const hasIcon = iconBits instanceof Uint8Array && iconBits.length === 128;
+
+  // MENU (4): guided-input groups/templates/entities (§4). Encoded first so its
+  // content words can be merged into the domain vocab below (throws on a cap).
+  const menuBytes = menu ? encodeMenuSection(menu) : null;   // Uint8Array | null
+
+  // DOMAIN (3): u16LE refusal_len + refusal + u16LE vocab_count + vocab_count × [u8 len][word].
+  // Menu-visible entities must never be refused when typed as free text, so when
+  // a domain gate already exists we UNION the menu's content words into the
+  // allow-list (one vocabulary, not two drifting ones). A menu alone never
+  // synthesizes a gate — a menu-only model stays ungated.
+  const refusalBytes = enc.encode((refusal || '').slice(0, 255));
+  const baseWords = Array.isArray(vocabWords) ? vocabWords : [];
+  const hasBaseDomain = refusalBytes.length > 0 || baseWords.length > 0;
+  let effectiveWords = baseWords;
+  if (menu && hasBaseDomain) {
+    const merged = new Set(baseWords);
+    for (const w of menuDerivedVocabWords(menu)) merged.add(w);
+    effectiveWords = [...merged];
+    console.log('[format] domain vocab: merged menu content words', baseWords.length, '→', effectiveWords.length);
+  }
   const encWords = [];
   let vocabLen = 0;
-  for (const w of (Array.isArray(vocabWords) ? vocabWords : [])) {
-    const wb = new TextEncoder().encode(w);
+  for (const w of effectiveWords) {
+    const wb = enc.encode(w);
     if (wb.length === 0 || wb.length > 255) continue;   // uint8 word_len field
     if (encWords.length >= 65535) break;                 // uint16 vocab_count field
     encWords.push(wb);
     vocabLen += 1 + wb.length;
   }
   const hasDomain = refusalBytes.length > 0 || encWords.length > 0;
-  const domainLen = hasDomain ? (2 + refusalBytes.length + 2 + vocabLen) : 0;
 
-  let infoBuf = null;
-  if (descBytes.length > 0 || hasIcon || hasDomain) {
-    const iconLen = hasIcon ? 128 : 0;
-    infoBuf = new ArrayBuffer(2 + descBytes.length + 1 + 1 + 1 + 2 + iconLen + domainLen);
-    const iv = new DataView(infoBuf);
+  // Build each present section's payload (inner encodings unchanged from v1).
+  const sections = [];
+  if (descBytes.length > 0) sections.push({ id: 1, payload: descBytes });
+  if (hasIcon) {
+    const p  = new Uint8Array(1 + 1 + 1 + 2 + 128);
+    const pv = new DataView(p.buffer);
+    pv.setUint8(0, 1);              // icon_fmt: 1bpp MSB-first row-major
+    pv.setUint8(1, 32);            // icon_w
+    pv.setUint8(2, 32);            // icon_h
+    pv.setUint16(3, 128, true);    // icon_len
+    p.set(iconBits, 5);
+    sections.push({ id: 2, payload: p });
+  }
+  if (hasDomain) {
+    const p  = new Uint8Array(2 + refusalBytes.length + 2 + vocabLen);
+    const pv = new DataView(p.buffer);
     let o = 0;
-    iv.setUint16(o, descBytes.length, true); o += 2;
-    new Uint8Array(infoBuf, o, descBytes.length).set(descBytes); o += descBytes.length;
-    iv.setUint8(o, hasIcon ? 1 : 0);  o += 1;   // icon_fmt: 1 = 1bpp MSB-first row-major
-    iv.setUint8(o, hasIcon ? 32 : 0); o += 1;   // icon_w
-    iv.setUint8(o, hasIcon ? 32 : 0); o += 1;   // icon_h
-    iv.setUint16(o, iconLen, true);   o += 2;
-    if (hasIcon) { new Uint8Array(infoBuf, o, iconLen).set(iconBits); o += iconLen; }  // advance past icon so domain lands after it
-    if (hasDomain) {
-      iv.setUint16(o, refusalBytes.length, true); o += 2;
-      new Uint8Array(infoBuf, o, refusalBytes.length).set(refusalBytes); o += refusalBytes.length;
-      iv.setUint16(o, encWords.length, true); o += 2;
-      for (const wb of encWords) {
-        iv.setUint8(o, wb.length); o += 1;
-        new Uint8Array(infoBuf, o, wb.length).set(wb); o += wb.length;
-      }
+    pv.setUint16(o, refusalBytes.length, true); o += 2;
+    p.set(refusalBytes, o); o += refusalBytes.length;
+    pv.setUint16(o, encWords.length, true); o += 2;
+    for (const wb of encWords) { p[o++] = wb.length; p.set(wb, o); o += wb.length; }
+    sections.push({ id: 3, payload: p });
+  }
+  if (menuBytes) sections.push({ id: 4, payload: menuBytes });
+
+  // CAPS (5): u8 caps_version + u16LE flags. What the model declares about
+  // ITSELF, which is how the firmware decides whether its answers may be offered
+  // as runnable device commands. Emitted only when something is set: absent and
+  // all-zero mean the same thing to the firmware (no capabilities), and not
+  // writing an empty section keeps existing models byte-identical.
+  //
+  // Bit 0 = COMMAND_MODE. Keep in step with LLM_CAP_COMMAND_MODE in
+  // components/hardwareone/System_LLM.h.
+  const capsFlags = commandMode ? 0x0001 : 0x0000;
+  if (capsFlags !== 0) {
+    const p  = new Uint8Array(3);
+    const pv = new DataView(p.buffer);
+    pv.setUint8(0, 1);                  // caps_version
+    pv.setUint16(1, capsFlags, true);   // flags, LE
+    sections.push({ id: 5, payload: p });
+  }
+
+  // Frame the sections: u16LE sentinel + u8 count + [id][u32LE len][payload]…
+  let infoBuf = null;
+  if (sections.length > 0) {
+    let total = 2 + 1;
+    for (const s of sections) total += 1 + 4 + s.payload.length;
+    infoBuf = new ArrayBuffer(total);
+    const iv = new DataView(infoBuf);
+    const ib = new Uint8Array(infoBuf);
+    let o = 0;
+    iv.setUint16(o, 0x4932, true); o += 2;         // v2 sentinel
+    iv.setUint8(o, sections.length); o += 1;
+    for (const s of sections) {
+      iv.setUint8(o, s.id); o += 1;
+      iv.setUint32(o, s.payload.length, true); o += 4;
+      ib.set(s.payload, o); o += s.payload.length;
     }
   }
   const infoLen = infoBuf ? infoBuf.byteLength : 0;
-  console.log('[format] info block:', infoLen, 'bytes (desc=' + descBytes.length + ' icon=' + (hasIcon ? '32x32' : 'none') + ' refusal=' + refusalBytes.length + ' vocab=' + encWords.length + ')');
+  const SEC_NAME = { 1: 'DESC', 2: 'ICON', 3: 'DOMAIN', 4: 'MENU', 5: 'CAPS' };
+  console.log('[format] info block v2:', infoLen, 'bytes — sections [' +
+    sections.map(s => SEC_NAME[s.id] + ':' + s.payload.length).join(', ') + ']');
 
   // Header
   const hdr = new ArrayBuffer(64);
@@ -889,6 +975,177 @@ function tokenizerSpecialTokenReport(tok) {
   };
 }
 
+// ── Guided-input menu (info block v2 MENU section) ─────────────────────────
+// A menu_manifest.json (§2 of the guided-menu spec) becomes the MENU section
+// (id 4) of the TLV info block. Encoding here mirrors the firmware's strict
+// walk (§4): everything is length-prefixed, the entity slot in a template `q`
+// is the single byte 0x1F ("{}" on both sides), and all §2 caps are enforced.
+const MENU_CAPS = { groups: 8, tplPerGroup: 64, entPerGroup: 1024,
+                    nameBytes: 32, qBytes: 120, entBytes: 48, menuBytes: 32768 };
+
+/** Clip a string for human-readable lint messages. */
+function menuClip(s) { s = String(s); return s.length > 40 ? s.slice(0, 37) + '…' : s; }
+
+/** Accept a dropped/loaded manifest in either the {q,label} object or bare-string
+ *  template form; throw on anything structurally unusable. Casing/punctuation of
+ *  `q`/entities is preserved byte-for-byte (the whole point of the menu). */
+function normalizeMenuManifest(raw) {
+  if (!raw || typeof raw !== 'object') throw new Error('not a JSON object');
+  const groupsIn = Array.isArray(raw.groups) ? raw.groups : null;
+  if (!groupsIn) throw new Error('missing "groups" array');
+  if (groupsIn.length === 0) throw new Error('"groups" is empty');
+  const groups = groupsIn.map((g, gi) => {
+    if (!g || typeof g !== 'object') throw new Error(`group ${gi} is not an object`);
+    const name = typeof g.name === 'string' ? g.name : '';
+    const mode = g.mode === 'do' ? 'do' : 'ask';   // §4 flags bit0; generators don't emit "do" in v1
+    const templates = (Array.isArray(g.templates) ? g.templates : []).map((t, ti) => {
+      if (typeof t === 'string') return { q: t };
+      if (t && typeof t === 'object' && typeof t.q === 'string')
+        return typeof t.label === 'string' ? { q: t.q, label: t.label } : { q: t.q };
+      throw new Error(`group ${gi} template ${ti} missing "q" string`);
+    });
+    const entities = (Array.isArray(g.entities) ? g.entities : []).map((e, ei) => {
+      if (typeof e !== 'string') throw new Error(`group ${gi} entity ${ei} is not a string`);
+      return e;
+    });
+    return { name, mode, templates, entities };
+  });
+  return { menu_version: (raw.menu_version | 0) || 1, groups };
+}
+
+/** Encode a template `q` to MENU bytes: the single "{}" slot → one 0x1F byte. */
+function encodeTemplateBytes(q) {
+  const enc = new TextEncoder();
+  const parts = String(q).split('{}');
+  if (parts.length > 2) throw new Error(`template has ${parts.length - 1} slots (max 1): "${menuClip(q)}"`);
+  if (parts.length === 1) return enc.encode(q);
+  const a = enc.encode(parts[0]);
+  const b = enc.encode(parts[1]);
+  const out = new Uint8Array(a.length + 1 + b.length);
+  out.set(a, 0);
+  out[a.length] = 0x1F;   // slot marker (firmware renders as "{}")
+  out.set(b, a.length + 1);
+  return out;
+}
+
+/** Serialize a normalized manifest to the MENU section payload (§4). Throws on
+ *  any §2 cap violation so buildOutputBin surfaces it as a hard convert error. */
+function encodeMenuSection(manifest) {
+  const enc = new TextEncoder();
+  const groups = manifest.groups;
+  if (groups.length < 1 || groups.length > MENU_CAPS.groups)
+    throw new Error(`menu group_count ${groups.length} out of range 1..${MENU_CAPS.groups}`);
+  const chunks = [];
+  const head = new Uint8Array(4);   // menu_ver, group_count, u16LE reserved=0
+  head[0] = 1;
+  head[1] = groups.length;
+  chunks.push(head);
+  for (const g of groups) {
+    const nameB = enc.encode(g.name);
+    if (nameB.length > MENU_CAPS.nameBytes) throw new Error(`group name over ${MENU_CAPS.nameBytes} B: "${menuClip(g.name)}"`);
+    if (g.templates.length > MENU_CAPS.tplPerGroup) throw new Error(`too many templates (${g.templates.length} > ${MENU_CAPS.tplPerGroup}) in "${menuClip(g.name)}"`);
+    if (g.entities.length > MENU_CAPS.entPerGroup) throw new Error(`too many entities (${g.entities.length} > ${MENU_CAPS.entPerGroup}) in "${menuClip(g.name)}"`);
+    const gh = new Uint8Array(1 + 1 + nameB.length + 2 + 2);
+    const gdv = new DataView(gh.buffer);
+    let o = 0;
+    gdv.setUint8(o, g.mode === 'do' ? 0x01 : 0x00); o += 1;   // flags: bit0 = Do-mode; bits1-7 reserved 0
+    gdv.setUint8(o, nameB.length); o += 1;
+    gh.set(nameB, o); o += nameB.length;
+    gdv.setUint16(o, g.templates.length, true); o += 2;
+    gdv.setUint16(o, g.entities.length, true); o += 2;
+    chunks.push(gh);
+    for (const t of g.templates) {
+      if (enc.encode(t.q).length > MENU_CAPS.qBytes) throw new Error(`template q over ${MENU_CAPS.qBytes} B: "${menuClip(t.q)}"`);
+      const tb = encodeTemplateBytes(t.q);
+      const item = new Uint8Array(1 + tb.length);
+      item[0] = tb.length; item.set(tb, 1);
+      chunks.push(item);
+    }
+    for (const e of g.entities) {
+      const eb = enc.encode(e);
+      if (eb.length > MENU_CAPS.entBytes) throw new Error(`entity over ${MENU_CAPS.entBytes} B: "${menuClip(e)}"`);
+      const item = new Uint8Array(1 + eb.length);
+      item[0] = eb.length; item.set(eb, 1);
+      chunks.push(item);
+    }
+  }
+  let total = 0; for (const c of chunks) total += c.length;
+  if (total > MENU_CAPS.menuBytes) throw new Error(`encoded MENU section ${total} B > ${MENU_CAPS.menuBytes} B cap`);
+  const out = new Uint8Array(total);
+  let off = 0; for (const c of chunks) { out.set(c, off); off += c.length; }
+  return out;
+}
+
+/** Content words from every entity + template (§10 trainer rule: lowercase,
+ *  split [a-z0-9]+, drop all-digit and len<3). Unioned into the domain vocab so
+ *  a menu-visible entity is never refused when typed as free text. */
+function menuDerivedVocabWords(manifest) {
+  const words = new Set();
+  const add = (s) => {
+    const m = String(s).toLowerCase().match(/[a-z0-9]+/g);
+    if (!m) return;
+    for (const w of m) {
+      if (w.length < 3) continue;         // drop len<3
+      if (/^[0-9]+$/.test(w)) continue;   // drop all-digit
+      words.add(w);
+    }
+  };
+  for (const g of manifest.groups) {
+    for (const e of g.entities) add(e);
+    for (const t of g.templates) add(t.q);   // "{}" carries no [a-z0-9], so the slot drops out naturally
+  }
+  return [...words];
+}
+
+/** Convert-time lints (§10). Returns { errors, warnings }; errors reject the
+ *  manifest (built WITHOUT a menu), warnings are advisory. `tok` may be null. */
+function validateMenuManifest(manifest, tok) {
+  const errors = [], warnings = [];
+  const enc = new TextEncoder();
+  const byteLen = (s) => enc.encode(s).length;
+  const groups = manifest.groups;
+  if (groups.length > MENU_CAPS.groups) errors.push(`${groups.length} groups > cap ${MENU_CAPS.groups}`);
+  // One vocab set for the whole-word token check (§10 quality signal).
+  let vocabSet = null;
+  if (tok && tok.vocab) { vocabSet = new Set(); for (let i = 0; i < tok.vocabSize; i++) vocabSet.add(tok.vocab[i]); }
+  const isWholeWordToken = (s) => vocabSet.has(s) || vocabSet.has('Ġ' + s) || vocabSet.has(' ' + s);
+  const missingTokens = [];
+  let entityTotal = 0, longestComposition = 0;
+  for (let gi = 0; gi < groups.length; gi++) {
+    const g = groups[gi];
+    const gtag = `group ${gi} ("${menuClip(g.name || '?')}")`;
+    if (byteLen(g.name) > MENU_CAPS.nameBytes) errors.push(`${gtag} name ${byteLen(g.name)} B > ${MENU_CAPS.nameBytes} B cap`);
+    if (g.templates.length > MENU_CAPS.tplPerGroup) errors.push(`${gtag} ${g.templates.length} templates > cap ${MENU_CAPS.tplPerGroup}`);
+    if (g.entities.length > MENU_CAPS.entPerGroup) errors.push(`${gtag} ${g.entities.length} entities > cap ${MENU_CAPS.entPerGroup}`);
+    let longestEnt = '';
+    for (const e of g.entities) {
+      if (byteLen(e) > MENU_CAPS.entBytes) errors.push(`${gtag} entity "${menuClip(e)}" ${byteLen(e)} B > ${MENU_CAPS.entBytes} B cap`);
+      if (e.length > longestEnt.length) longestEnt = e;
+      if (vocabSet && !isWholeWordToken(e)) missingTokens.push(e);
+    }
+    entityTotal += g.entities.length;
+    for (const t of g.templates) {
+      const q = t.q;
+      const slots = (q.match(/\{\}/g) || []).length;
+      if (slots > 1) errors.push(`${gtag} template "${menuClip(q)}" has ${slots} slots — max 1 "{}" per template`);
+      if (byteLen(q) > MENU_CAPS.qBytes) errors.push(`${gtag} template "${menuClip(q)}" ${byteLen(q)} B > ${MENU_CAPS.qBytes} B cap`);
+      const composed = slots >= 1 ? q.replace('{}', longestEnt) : q;
+      if (composed.length > longestComposition) longestComposition = composed.length;
+    }
+  }
+  if (longestComposition > 100)
+    warnings.push(`longest sample composition is ${longestComposition} chars (>100) — may crowd the model's seq_len headroom`);
+  if (missingTokens.length)
+    warnings.push(`${missingTokens.length}/${entityTotal} entities are not a single tokenizer token (e.g. ${missingTokens.slice(0, 3).map(s => `"${menuClip(s)}"`).join(', ')}) — they tokenize as multiple pieces (quality signal, not fatal)`);
+  if (!errors.length) {
+    try {
+      const n = encodeMenuSection(manifest).length;   // catches the encoded-size cap + any residual per-item cap
+      if (n > MENU_CAPS.menuBytes) errors.push(`encoded MENU section ${n} B > ${MENU_CAPS.menuBytes} B cap`);
+    } catch (err) { errors.push(err && err.message ? err.message : String(err)); }
+  }
+  return { errors, warnings };
+}
+
 /**
  * Sketch for offline training (HF Trainer): dataset layout + parity with this tokenizer.bin payload.
  * This does not change model.bin bytes — only manifest + UI copy.
@@ -969,7 +1226,7 @@ function buildFirmwareManifest(meta) {
     format_magic_hex: '0x' + MAGIC.toString(16).toUpperCase(),
     spec_version: 2,
     file_size_bytes: blobSize,
-    info_block_bytes: infoLen || 0,  // header offset 24 (0 = none); desc + 32x32 1bpp icon
+    info_block_bytes: infoLen || 0,  // header offset 24 (0 = none); TLV v2: DESC/ICON/DOMAIN/MENU sections
     global_quant_type: quantType === QUANT.INT8 ? 'INT8' : 'FP32',
     group_size: groupSize,
     derived_geometry: {
@@ -992,7 +1249,7 @@ function buildFirmwareManifest(meta) {
     },
     layout_order: [
       '64-byte header (info_len @ offset 24)',
-      infoLen ? 'info block: uint16 desc_len + desc + icon_fmt/w/h + uint16 icon_len + 1bpp icon (+ optional uint16 refusal_len + refusal + uint16 vocab_count + per-word uint8 len+bytes)' : null,
+      infoLen ? 'info block v2 (TLV): u16LE 0x4932 sentinel + u8 section_count + sections [u8 id][u32LE len][payload] — id 1=DESC (raw utf8), 2=ICON (fmt/w/h + u16 len + 1bpp), 3=DOMAIN (u16 refusal_len+refusal + u16 vocab_count + per-word u8 len+bytes), 4=MENU (u8 ver + u8 group_count + u16 rsvd + per-group flags/name/tpl/ent)' : null,
       'uint32 tokenizer_len + tokenizer blob',
       'embedding tensor block',
       posEmbedData ? 'positional embedding tensor block (wpe)' : null,
@@ -1440,6 +1697,8 @@ document.addEventListener('DOMContentLoaded', function () {
   if (iconInput) iconInput.addEventListener('change', onModelIconChange);
   const vocabInput = $('model-vocab');
   if (vocabInput) vocabInput.addEventListener('change', onModelVocabChange);
+  const menuInput = $('model-menu');
+  if (menuInput) menuInput.addEventListener('change', onModelMenuChange);
 
   console.groupEnd();
 });
@@ -1452,6 +1711,8 @@ async function handleFiles(files) {
   // the next model; folder auto-load or a manual pick sets it again below.
   gDomainVocab = [];
   { const _vc = $('model-vocab-count'); if (_vc) _vc.textContent = ''; }
+  gMenuManifest = null;
+  { const _mc = $('model-menu-count'); if (_mc) _mc.textContent = ''; }
 
   // Restrict to the shallowest directory level of the drop. HF Trainer leaves
   // checkpoint copies in deeper trainer_ckpt/checkpoint-*/ subfolders — each a
@@ -1549,6 +1810,19 @@ async function handleFiles(files) {
         uiLog('ok', `Domain gate: auto-loaded ${gDomainVocab.length} words from ${vocabFile.name} — off-topic prompts will be refused.`);
       } catch (err) {
         uiLog('warn', 'Found a domain_vocab file but could not read it: ' + (err && err.message ? err.message : err));
+      }
+    }
+
+    // Auto-load a guided-menu manifest shipped in the model folder: generators
+    // write *menu_manifest.json next to config.json (train_tiny_model.py copies
+    // it into out_dir). Bakes the guided-ask groups/templates/entities into the
+    // .bin; a manual pick via the Menu manifest input still overrides it after.
+    const menuFile = scoped.find(f => f.name.toLowerCase().endsWith('menu_manifest.json'));
+    if (menuFile) {
+      try {
+        applyMenuManifest(await menuFile.text(), '(from model folder)');
+      } catch (err) {
+        uiLog('warn', 'Found a menu_manifest file but could not read it: ' + (err && err.message ? err.message : err));
       }
     }
     updateEstimate();
@@ -1918,6 +2192,7 @@ function printLlmConverterDiagnostics(o) {
 // and consumed by startConversion; null when no icon is chosen.
 let gModelIconBits = null;  // Uint8Array(128), MSB-first, row-major
 let gDomainVocab = [];      // lowercased, de-duped, trimmed domain words for the refusal gate ([] = none)
+let gMenuManifest = null;   // normalized guided-menu manifest baked into the .bin (null = no menu)
 
 function packCanvasTo1bpp(ctx) {
   const img = ctx.getImageData(0, 0, 32, 32).data;
@@ -1985,6 +2260,54 @@ async function onModelVocabChange(e) {
   }
 }
 
+// Parse + lint a menu_manifest.json and, if clean, arm it for the build. Shared
+// by the folder auto-loader and the manual picker. `sourceNote` is appended to
+// the status line ('' for a manual pick). Errors reject the manifest so the
+// model still builds — just without a guided menu. Returns true when armed.
+function applyMenuManifest(rawText, sourceNote) {
+  const countEl = $('model-menu-count');
+  let manifest;
+  try {
+    manifest = normalizeMenuManifest(JSON.parse(rawText));
+  } catch (err) {
+    gMenuManifest = null;
+    if (countEl) countEl.textContent = '';
+    uiLog('err', 'Menu manifest: ' + (err && err.message ? err.message : err));
+    return false;
+  }
+  const { errors, warnings } = validateMenuManifest(manifest, state.tokenizer);
+  for (const w of warnings) uiLog('warn', 'Menu: ' + w);
+  if (errors.length) {
+    gMenuManifest = null;
+    if (countEl) countEl.textContent = '';
+    for (const e of errors) uiLog('err', 'Menu: ' + e);
+    uiLog('err', 'Menu manifest rejected — the model will build WITHOUT a guided menu. Fix the errors above and re-pick.');
+    return false;
+  }
+  gMenuManifest = manifest;
+  let tpls = 0, ents = 0;
+  for (const g of manifest.groups) { tpls += g.templates.length; ents += g.entities.length; }
+  const kb = (encodeMenuSection(manifest).length / 1024).toFixed(1);
+  const line = `Menu: ${manifest.groups.length} groups / ${tpls} templates / ${ents} entities / ${kb} KB`;
+  const suffix = sourceNote ? ' ' + sourceNote : '';
+  if (countEl) countEl.textContent = line + suffix;
+  uiLog('ok', line + suffix + ' — guided ask enabled.');
+  return true;
+}
+
+async function onModelMenuChange(e) {
+  const countEl = $('model-menu-count');
+  const file = e.target.files && e.target.files[0];
+  if (!file) { gMenuManifest = null; if (countEl) countEl.textContent = ''; return; }
+  try {
+    applyMenuManifest(await file.text(), '');
+  } catch (err) {
+    gMenuManifest = null;
+    if (countEl) countEl.textContent = '';
+    uiLog('warn', 'Menu manifest load failed: ' + (err && err.message ? err.message : err));
+  }
+}
+
 async function startConversion() {
   if (!state.ready) { uiLog('warn', 'Not ready'); return; }
   if (state.converting) return;
@@ -2002,6 +2325,8 @@ async function startConversion() {
   const modelIcon = gModelIconBits;  // Uint8Array(128) MSB-first, or null
   const modelRefusal = ($('model-refusal')?.value || '').trim();
   const modelVocab = gDomainVocab;   // lowercased word list ([] = no domain gate)
+  const modelMenu = gMenuManifest;   // normalized guided-menu manifest (null = no menu)
+  const modelCommandMode = !!$('model-command-mode')?.checked;   // CAPS bit 0
 
   console.group('[app] startConversion quant=' + (quantType===QUANT.INT8?'int8':'f32') + ' group=' + groupSize);
 
@@ -2303,7 +2628,8 @@ self.onmessage = function ({ data }) {
     const { blob, manifest, infoLen } = buildOutputBin({ config: state.config, tokBuf, embedData,
       posEmbedData, layers, finalNorm, finalNormBias, lmHead, quantType, groupSize,
       tokenizer: state.tokenizer ?? null, description: modelDesc, iconBits: modelIcon,
-      refusal: modelRefusal, vocabWords: modelVocab });
+      refusal: modelRefusal, vocabWords: modelVocab, menu: modelMenu,
+      commandMode: modelCommandMode });
     const sizeMB  = (blob.size / 1024 / 1024).toFixed(2);
     const estimatedBytes = estimateSize({ config: state.config, tokBufSize: tokBuf.byteLength, quantType, groupSize, infoBytes: infoLen });
 

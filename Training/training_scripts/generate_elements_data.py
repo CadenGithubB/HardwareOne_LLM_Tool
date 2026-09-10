@@ -19,6 +19,8 @@ import json
 import random
 from pathlib import Path
 
+from menu_manifest import MenuBuilder
+
 DATA = Path(__file__).parent.parent / "training_data" / "elements.json"
 
 METAL_FAMILIES = {
@@ -174,6 +176,59 @@ class Corpus:
         return len(self.blocks)
 
 
+# ── Guided-input menu (menu_manifest.json) ────────────────────────────────
+# Emits the "pick a question" menu the firmware shows instead of free-text
+# (spec: LLM Guided-Input Menu). Canonical template = FIRST entry of each *_Q
+# list, with the {name}/{sym}/{num} slot rewritten to the menu's single "{}". A
+# composed template + entity string is a BYTE-EXACT corpus line. `slotless_first_asks`
+# is the set of valid slotless first-phrasings (GENERAL + CAPABILITIES) used to
+# assert the "General" group can't drift out of sync with the corpus.
+def build_menu(els, slotless_first_asks):
+    def slotify(phrasing):
+        for ph in ("{name}", "{sym}", "{num}"):
+            phrasing = phrasing.replace(ph, "{}")
+        return phrasing
+
+    m = MenuBuilder()
+
+    elems = m.menu_group("Elements")
+    elems.template(slotify(NUM_Q[0]), label="{}'s number")
+    elems.template(slotify(SYM_Q[0]), label="Symbol for {}")
+    elems.template(slotify(FAM_Q[0]), label="Type of {}")
+    elems.template(slotify(ABOUT_Q[0]), label="About {}")
+    elems.add_entities(e["name"] for e in els)
+
+    bysym = m.menu_group("By symbol")
+    bysym.template(slotify(BYSYM_Q[0]), label="Symbol {}")
+    bysym.add_entities(e["symbol"] for e in els)
+
+    bynum = m.menu_group("By number")
+    bynum.template(slotify(BYNUM_Q[0]), label="Element #{}")
+    bynum.add_entities(str(e["number"]) for e in els)
+
+    # Families: reverse "which elements are Xs" lookup; entities are the plural
+    # family names (inline phrasing — there is no families *_Q list).
+    fams = m.menu_group("Families")
+    fams.template("Which elements are {}?", label="The {}")
+    fams.add_entities(fam_plural(f) for f in dict.fromkeys(e["family"] for e in els))
+
+    gen = m.menu_group("General")
+    for q in ("How many elements are there?",
+              "What is the lightest element?",
+              "What is the heaviest element?",
+              "What is the most abundant element in the universe?",
+              "What is the periodic table?",
+              "What is an atomic number?",
+              "What is a period?",
+              "What is a group?",
+              "What can you do?",
+              "What questions can I ask?"):
+        assert q in slotless_first_asks, f"general q not a corpus first-phrasing: {q!r}"
+        gen.template(q)
+
+    return m
+
+
 def main():
     ap = argparse.ArgumentParser(description="Generate periodic-table training corpus")
     ap.add_argument("--out", type=Path,
@@ -181,6 +236,10 @@ def main():
     ap.add_argument("--tokens-out", type=Path,
                     default=Path(__file__).parent.parent / "training_data" / "elements_special_tokens.txt")
     ap.add_argument("--seed", type=int, default=1234)
+    ap.add_argument("--menu-out", type=Path, default=None,
+                    help="Where to write menu_manifest.json (default: next to --out).")
+    ap.add_argument("--menu-only", action="store_true",
+                    help="Only (re)write the guided-input menu manifest; leave the corpus untouched.")
     args = ap.parse_args()
 
     els = load_elements()
@@ -320,18 +379,25 @@ def main():
     for p in PROSE:
         c.prose(p)
 
-    n = c.write(args.out, seed=args.seed)
-    qa = sum(1 for b in c.blocks if len(b) == 2)
-    print(f"Wrote {args.out}")
-    print(f"  blocks: {n}  (Q&A: {qa}, prose: {n - qa})  elements: {len(els)}")
+    if not args.menu_only:
+        n = c.write(args.out, seed=args.seed)
+        qa = sum(1 for b in c.blocks if len(b) == 2)
+        print(f"Wrote {args.out}")
+        print(f"  blocks: {n}  (Q&A: {qa}, prose: {n - qa})  elements: {len(els)}")
 
-    names = [e["name"] for e in els]
-    header = ("# Element names only, kept whole by the tokenizer so long names\n"
-              "# don't fragment. Symbols are EXCLUDED on purpose: many collide\n"
-              "# with English words and would corrupt tokenization. Pass with\n"
-              "# --special-tokens. One token per line; blank lines / # ignored.\n\n")
-    args.tokens_out.write_text(header + "\n".join(names) + "\n", encoding="utf-8")
-    print(f"Wrote {args.tokens_out}  ({len(names)} name tokens; symbols excluded to avoid word collisions)")
+        names = [e["name"] for e in els]
+        header = ("# Element names only, kept whole by the tokenizer so long names\n"
+                  "# don't fragment. Symbols are EXCLUDED on purpose: many collide\n"
+                  "# with English words and would corrupt tokenization. Pass with\n"
+                  "# --special-tokens. One token per line; blank lines / # ignored.\n\n")
+        args.tokens_out.write_text(header + "\n".join(names) + "\n", encoding="utf-8")
+        print(f"Wrote {args.tokens_out}  ({len(names)} name tokens; symbols excluded to avoid word collisions)")
+
+    # Guided-input menu, emitted next to the corpus for the converter's auto-load.
+    slotless_first_asks = ({qs[0] for qs, _a in GENERAL} | {qs[0] for qs, _a in CAPABILITIES})
+    menu_out = args.menu_out or (args.out.parent / "menu_manifest.json")
+    ng, nt, ne = build_menu(els, slotless_first_asks).write_menu(menu_out)
+    print(f"Wrote {menu_out}  (menu: {ng} groups / {nt} templates / {ne} entities)")
 
 
 if __name__ == "__main__":

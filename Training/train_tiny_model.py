@@ -232,6 +232,10 @@ def parse_args() -> argparse.Namespace:
                    help="Skip writing domain_vocab.txt (the on-device refusal-gate allow-list) into the output "
                         "folder. By default the trainer extracts an allow-list from the corpus so the converter "
                         "auto-loads it for the refusal gate.")
+    p.add_argument("--menu", type=Path, default=None, metavar="FILE",
+                   help="Path to a menu_manifest.json (guided-input menu) to copy into the output folder. If "
+                        "omitted, a menu_manifest.json sitting next to the corpus (--text) is used automatically. "
+                        "The converter auto-loads it from the model folder, like domain_vocab.txt.")
     return p.parse_args()
 
 
@@ -965,6 +969,19 @@ def main() -> None:
             print(f"Wrote {_vpath.name} ({_vn} words) — the converter auto-loads it for the refusal gate.")
         except Exception as _e:
             print(f"  (domain_vocab.txt skipped: {_e})")
+
+    # Guided-input menu pass-through: copy menu_manifest.json (from --menu, or
+    # sitting next to the corpus) into the model folder verbatim so the
+    # converter's drop-one-folder auto-load finds it, like domain_vocab.txt.
+    _menu_src = args.menu
+    if _menu_src is None and text_paths:
+        _cand = text_paths[0].parent / "menu_manifest.json"
+        _menu_src = _cand if _cand.exists() else None
+    if _menu_src and Path(_menu_src).exists():
+        import shutil as _shutil
+        _menu_dst = out_dir / "menu_manifest.json"
+        _shutil.copyfile(_menu_src, _menu_dst)
+        print(f"Copied {Path(_menu_src).name} → {_menu_dst.name} (the converter auto-loads the guided-input menu).")
 
     # Remove HF Trainer checkpoints from the deliverable folder. Each
     # trainer_ckpt/checkpoint-*/ holds its OWN full model.safetensors; if left

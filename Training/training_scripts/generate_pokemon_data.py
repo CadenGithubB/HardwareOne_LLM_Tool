@@ -23,6 +23,7 @@ import random
 from pathlib import Path
 
 from pokemon_gen1_supplement import CATCH_LOC, DEX_ENTRY
+from menu_manifest import MenuBuilder
 
 VALID_TYPES = {
     "Normal", "Fire", "Water", "Grass", "Electric", "Ice", "Fighting",
@@ -266,6 +267,20 @@ BADGE_HM = {
     "Soul Badge":    ("Surf", "HM03"),
 }
 
+# Gen-1 (Red/Blue) gym-leader rosters, final battle. The last member is the ace
+# and must match the GYMS ace column above. Kept short (real teams, deduped) so
+# the roster answer fits the context window.
+GYM_TEAMS = {
+    "Brock":     ["Geodude", "Onix"],
+    "Misty":     ["Staryu", "Starmie"],
+    "Lt. Surge": ["Voltorb", "Pikachu", "Raichu"],
+    "Erika":     ["Victreebel", "Tangela", "Vileplume"],
+    "Koga":      ["Koffing", "Muk", "Weezing"],
+    "Sabrina":   ["Kadabra", "Mr. Mime", "Venomoth", "Alakazam"],
+    "Blaine":    ["Growlithe", "Ponyta", "Rapidash", "Arcanine"],
+    "Giovanni":  ["Rhyhorn", "Dugtrio", "Nidoqueen", "Nidoking", "Rhydon"],
+}
+
 # Elite Four: (name, type)
 ELITE_FOUR = [
     ("Lorelei", "Ice"),
@@ -442,6 +457,18 @@ HMS = [
     ("HM05", "Flash", "HM05 teaches Flash, which lights up dark caves like Rock Tunnel."),
 ]
 
+# Which Pokemon can learn each HM field move (Gen 1). Curated: each answer
+# leads with the type-level truth a player reasons about ("mostly Flying types")
+# plus a few verified example species, rather than an error-prone exhaustive
+# per-species learnset. move -> (type description, [example species]).
+HM_LEARNERS = {
+    "Cut":      ("many Grass and Normal Pokemon", ["Bulbasaur", "Charmander", "Oddish", "Farfetch'd", "Tangela"]),
+    "Fly":      ("Flying-type Pokemon", ["Pidgeot", "Fearow", "Charizard", "Aerodactyl", "the legendary birds"]),
+    "Surf":     ("most Water-type Pokemon", ["Blastoise", "Gyarados", "Lapras", "Tentacruel", "Poliwrath"]),
+    "Strength": ("strong, heavy Pokemon", ["Machamp", "Golem", "Snorlax", "Rhydon", "Charizard"]),
+    "Flash":    ("many Electric, Psychic, and Normal Pokemon", ["Pikachu", "Abra", "Meowth", "Clefairy", "Jigglypuff"]),
+}
+
 # Mechanics / general knowledge: (list of question phrasings, answer)
 MECHANICS = [
     (["How many Pokemon are there?", "How many Pokemon are in Kanto?",
@@ -507,6 +534,17 @@ MECHANICS = [
      "Use a fishing rod like the Old Rod, Good Rod, or Super Rod next to water to hook Pokemon."),
     (["How do I revive a fossil?", "Where do I revive fossils?"],
      "Take a fossil to the lab on Cinnabar Island to revive it into a Pokemon."),
+    (["Where do I store Pokemon?", "How do I store Pokemon?", "Where do I deposit Pokemon?",
+      "What is Bill's PC?", "What is the PC?", "How does the storage system work?",
+      "Where do extra Pokemon go?", "Where do I find a PC?", "How do I access my Pokemon boxes?"],
+     "Bill's PC stores Pokemon you aren't carrying. Deposit and withdraw them from the boxes on the PC at any Pokemon Center."),
+    (["How do I change a Pokemon's nickname?", "How do I rename my Pokemon?",
+      "Can I change the name of a Pokemon?", "Who is the Name Rater?", "Where is the Name Rater?",
+      "How do I nickname a Pokemon?"],
+     "The Name Rater, an old man in Lavender Town, changes a Pokemon's nickname for free."),
+    (["Where is the graveyard?", "What is the Pokemon graveyard?", "Where are dead Pokemon buried?",
+      "Where is the haunted tower?", "Where do departed Pokemon rest?"],
+     "The Pokemon Tower in Lavender Town is a graveyard where departed Pokemon are laid to rest."),
 ]
 
 # What this model can answer — meta help (trained into the .bin like HardwareOne).
@@ -893,6 +931,70 @@ class Corpus:
         return len(self.blocks)
 
 
+# ── Guided-input menu (menu_manifest.json) ────────────────────────────────
+# Emits the "pick a question" menu the firmware shows instead of free-text
+# (spec: LLM Guided-Input Menu). Canonical template = FIRST entry of each *_Q
+# list, with the {name}/{num}/{t} slot rewritten to the menu's single "{}". A
+# composed template + entity string is a BYTE-EXACT corpus line — that is the
+# whole point — so the templates and entity rosters come straight from the data
+# structures above.
+def build_menu():
+    def slotify(phrasing):
+        for ph in ("{name}", "{num}", "{t}"):
+            phrasing = phrasing.replace(ph, "{}")
+        return phrasing
+
+    m = MenuBuilder()
+
+    # Pokemon: facts every one of the 151 has (Pokedex-entry / catch-location
+    # templates are left off — only some Pokemon have them, so they'd be dead
+    # menu combinations).
+    poke = m.menu_group("Pokemon")
+    poke.template(slotify(TYPE_Q[0]), label="Type of {}")
+    poke.template(slotify(NUM_Q[0]), label="Dex number of {}")
+    poke.template(slotify(INTO_Q[0]), label="{} evolves into?")
+    poke.template(slotify(FROM_Q[0]), label="{} evolves from?")
+    poke.template(slotify(ABOUT_Q[0]), label="About {}")
+    poke.add_entities(name for _num, name, _types, _into in POKEMON)
+
+    # By number: dex number -> name.
+    bynum = m.menu_group("By number")
+    bynum.template(slotify(NUM_TO_NAME_Q[0]), label="Who is #{}?")
+    bynum.add_entities(str(num) for num, _n, _t, _i in POKEMON)
+
+    # Types: reverse "list all X-type" lookup.
+    types = m.menu_group("Types")
+    types.template(slotify(TYPE_LIST_Q[0]), label="{} type Pokemon")
+    present = type_to_names()
+    types.add_entities(t for t in TYPES if t in present)
+
+    # Items: identity questions over the item roster (inline phrasings, first
+    # two — there is no ITEMS *_Q list).
+    items = m.menu_group("Items")
+    items.template("What is a {}?")
+    items.template("What does a {} do?")
+    items.add_entities(name for name, _fact in ITEMS)
+
+    # General: slotless canned questions. Assert each is a real corpus
+    # first-phrasing so the menu can't drift out of byte-exact sync.
+    first_asks = {qs[0] for qs, _a in MECHANICS} | {qs[0] for qs, _a in CAPABILITIES}
+    gen = m.menu_group("General")
+    for q in ("What can you do?",
+              "What questions can I ask?",
+              "How many Pokemon are there?",
+              "How do I catch a Pokemon?",
+              "How do Pokemon evolve?",
+              "Who are the Kanto starters?",
+              "What are the legendary birds?",
+              "What is the strongest Pokemon?",
+              "How many gyms are there?",
+              "Who are the Elite Four?"):
+        assert q in first_asks, f"general q not a corpus first-phrasing: {q!r}"
+        gen.template(q)
+
+    return m
+
+
 def main():
     ap = argparse.ArgumentParser(description="Generate Kanto Pokedex training corpus")
     ap.add_argument("--out", type=Path,
@@ -901,6 +1003,10 @@ def main():
     ap.add_argument("--tokens-out", type=Path,
                     default=Path(__file__).parent.parent / "training_data" / "pokemon_special_tokens.txt",
                     help="Where to write the whole-word special-tokens file (the 151 names).")
+    ap.add_argument("--menu-out", type=Path, default=None,
+                    help="Where to write menu_manifest.json (default: next to --out).")
+    ap.add_argument("--menu-only", action="store_true",
+                    help="Only (re)write the guided-input menu manifest; leave the corpus untouched.")
     args = ap.parse_args()
 
     evolves_from = build_evolves_from()
@@ -924,6 +1030,21 @@ def main():
         else:
             c.qa_variants([q.format(name=name) for q in FROM_Q],
                           f"{name} does not evolve from any Pokemon.")
+        # Reverse evolution: "what evolves INTO {name}" (its pre-evo becomes it).
+        # Same fact as FROM_Q but with {name} as the OBJECT, which otherwise reads
+        # as a forward-evolution question and answers "does not evolve".
+        if name in evolves_from:
+            c.qa_variants([f"What evolves into {name}?",
+                           f"What Pokemon evolves into {name}?",
+                           f"Which Pokemon evolves into {name}?",
+                           f"What turns into {name}?",
+                           f"What becomes {name}?"],
+                          f"{evolves_from[name]} evolves into {name}.")
+        else:
+            c.qa_variants([f"What evolves into {name}?",
+                           f"What Pokemon evolves into {name}?",
+                           f"Which Pokemon evolves into {name}?"],
+                          f"Nothing evolves into {name}; it is a base form.")
         c.qa_variants([q.format(name=name) for q in ABOUT_Q],
                       about_answer(name, num, types, into, evolves_from))
         c.qa_variants([f"What category is {name}?",
@@ -969,6 +1090,27 @@ def main():
         c.qa_variants([f"Who is the {ORDINAL[order]} gym leader?",
                        f"Which leader is the {ORDINAL[order]} gym?"],
                       f"The {ORDINAL[order]} Kanto gym leader is {leader} of {city}.")
+        # Personal identity — so "Who is Brock?" / "What is Brock?" retrieve the
+        # leader, instead of collapsing onto the 151x Pokemon "Who is X?" template
+        # (which was answering "Brock is a Rock-type Pokemon, number 95" — Onix).
+        # Giovanni is covered richer as a character (Team Rocket boss); skip him.
+        if leader != "Giovanni":
+            c.qa_variants([f"Who is {leader}?",
+                           f"What is {leader}?",
+                           f"Tell me about {leader}.",
+                           f"Describe {leader}.",
+                           f"Give me info on {leader}."],
+                          f"{leader} is the {city} Gym Leader, who uses {gtype}-type Pokemon.")
+        # Real roster (Gen-1 team) — answers "what Pokemon does {leader} have".
+        team = GYM_TEAMS.get(leader)
+        if team:
+            c.qa_variants([f"What Pokemon does {leader} have?",
+                           f"Which Pokemon does {leader} have?",
+                           f"What is {leader}'s team?",
+                           f"What is {leader}'s roster?",
+                           f"What Pokemon are on {leader}'s team?",
+                           f"What is {leader}'s party?"],
+                          f"{leader} uses {_list_join(team)}.")
 
     # Gym overview + badge -> HM field moves
     leaders = ", ".join(g[2] for g in GYMS[:-1]) + ", and " + GYMS[-1][2]
@@ -1088,6 +1230,9 @@ def main():
                        f"What does a {stone} evolve?",
                        f"What Pokemon use a {stone}?",
                        f"what pokemon uses a {stone.lower()}?",
+                       f"What Pokemon use {stone}s?",
+                       f"Which Pokemon use {stone}s?",
+                       f"What pokemon use {stone.replace(' ', '').lower()}s?",
                        f"What evolves with a {stone}?",
                        f"Which Pokemon need a {stone}?"],
                       f"A {stone} evolves {listing}.")
@@ -1137,6 +1282,17 @@ def main():
                        f"What does the move {move} do?",
                        f"How do I use {move}?"],
                       fact)
+
+    # Which Pokemon / types can learn each HM (curated type-level answer).
+    for move, (typedesc, examples) in HM_LEARNERS.items():
+        c.qa_variants([f"Which Pokemon can learn {move}?",
+                       f"What Pokemon can learn {move}?",
+                       f"What can learn {move}?",
+                       f"Which Pokemon learn {move}?",
+                       f"What types of Pokemon can learn {move}?",
+                       f"What type of Pokemon can learn {move}?",
+                       f"Who can learn {move}?"],
+                      f"{move} can be learned by {typedesc}, such as {_list_join(examples)}.")
 
     # Reverse type lookups: "list water pokemon" / "which pokemon are fire type".
     # These are aggregate queries a tiny model can't DERIVE from the per-Pokemon
@@ -1290,24 +1446,30 @@ def main():
                   f"The first Kanto Pokemon is {num_to_name[1]} (#1), and the last is "
                   f"{num_to_name[last_num]} (#{last_num}).")
 
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.tokens_out.parent.mkdir(parents=True, exist_ok=True)
-    n = c.write(args.out, seed=args.seed)
-    qa_count = sum(1 for b in c.blocks if len(b) == 2)
-    print(f"Wrote {args.out}")
-    print(f"  blocks: {n}  (Q&A pairs: {qa_count}, prose: {n - qa_count})")
-    print(f"  Pokemon: {len(POKEMON)}  gyms: {len(GYMS)}  locations: {len(LOCATIONS)}")
-    print(f"  conflicting-answer duplicates dropped: {c.conflicts_dropped} (one answer per question enforced)")
+    if not args.menu_only:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.tokens_out.parent.mkdir(parents=True, exist_ok=True)
+        n = c.write(args.out, seed=args.seed)
+        qa_count = sum(1 for b in c.blocks if len(b) == 2)
+        print(f"Wrote {args.out}")
+        print(f"  blocks: {n}  (Q&A pairs: {qa_count}, prose: {n - qa_count})")
+        print(f"  Pokemon: {len(POKEMON)}  gyms: {len(GYMS)}  locations: {len(LOCATIONS)}")
+        print(f"  conflicting-answer duplicates dropped: {c.conflicts_dropped} (one answer per question enforced)")
 
-    # Whole-word special tokens: the 151 names, so each tokenizes atomically
-    # (no partial-name fragments). Pass to a trainer with --special-tokens.
-    names = [name for _num, name, _types, _into in POKEMON]
-    header = ("# Pokemon name tokens — keep each of the 151 names whole in the\n"
-              "# tokenizer so names can't be garbled into partial fragments.\n"
-              "# Pass to a trainer with:  --special-tokens training_data/pokemon_special_tokens.txt\n"
-              "# One token per line; blank lines and # comments are ignored.\n\n")
-    args.tokens_out.write_text(header + "\n".join(names) + "\n", encoding="utf-8")
-    print(f"Wrote {args.tokens_out}  ({len(names)} name tokens)")
+        # Whole-word special tokens: the 151 names, so each tokenizes atomically
+        # (no partial-name fragments). Pass to a trainer with --special-tokens.
+        names = [name for _num, name, _types, _into in POKEMON]
+        header = ("# Pokemon name tokens — keep each of the 151 names whole in the\n"
+                  "# tokenizer so names can't be garbled into partial fragments.\n"
+                  "# Pass to a trainer with:  --special-tokens training_data/pokemon_special_tokens.txt\n"
+                  "# One token per line; blank lines and # comments are ignored.\n\n")
+        args.tokens_out.write_text(header + "\n".join(names) + "\n", encoding="utf-8")
+        print(f"Wrote {args.tokens_out}  ({len(names)} name tokens)")
+
+    # Guided-input menu, emitted next to the corpus for the converter's auto-load.
+    menu_out = args.menu_out or (args.out.parent / "menu_manifest.json")
+    ng, nt, ne = build_menu().write_menu(menu_out)
+    print(f"Wrote {menu_out}  (menu: {ng} groups / {nt} templates / {ne} entities)")
 
 
 if __name__ == "__main__":

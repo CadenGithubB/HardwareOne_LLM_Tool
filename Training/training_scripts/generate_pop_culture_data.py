@@ -412,5 +412,43 @@ def build(c):
     )
 
 
+# ── Guided-input menu (menu_manifest.json) ────────────────────────────────
+# Emits a "pick a question" menu the firmware shows instead of free-text (spec:
+# LLM Guided-Input Menu). Groups: People / Categories / Places / General. Each
+# template's "{}" slot, once filled with an entity, is a BYTE-EXACT corpus line,
+# so phrasings are the FIRST ask of each list and entities keep corpus casing.
+# genre/sport attributes are intentionally left off the flat People group (they
+# apply only to musicians/athletes, which would make dead menu combinations).
+def _slotify(phrasing):
+    return phrasing.replace("{name}", "{}").replace("{value}", "{}")
+
+
+def build_menu(m):
+    people = m.menu_group("People")
+    people.template("Who is {}?", label="About {}")
+    people.template(_slotify(ATTRIBUTE_QUESTIONS["role"]["ask"][0]), label="{}'s job")
+    people.template(_slotify(ATTRIBUTE_QUESTIONS["field"]["ask"][0]), label="{}'s field")
+    people.template(_slotify(ATTRIBUTE_QUESTIONS["from"]["ask"][0]), label="{} is from?")
+    people.template(_slotify(ATTRIBUTE_QUESTIONS["known_for"]["ask"][0]), label="{} known for?")
+    people.add_entities(e["name"] for e in ENTITIES)
+
+    cats = m.menu_group("Categories")
+    cats.template(_slotify(REVERSE_LOOKUPS["field"]["ask"][0]), label="People in {}")
+    cats.add_entities(sorted({e["field"] for e in ENTITIES if "field" in e}))
+
+    places = m.menu_group("Places")
+    places.template("What is {}?", label="About {}")
+    places.template("What continent is {} in?", label="{}'s continent")
+    places.add_entities(p["name"] for p in PLACES)
+
+    gen = m.menu_group("General")
+    for q in (CAPABILITIES[0][0][0], LORE[0][0][0], LORE[1][0][0],
+              LORE[2][0][0], LORE[3][0][0]):
+        gen.template(q)
+    inst = {nm: questions for nm, questions, _ans in INSTITUTIONS}
+    for nm in ("NBA", "NFL", "Grammys", "Oscars", "Olympics", "World Cup"):
+        gen.template(inst[nm][0])
+
+
 if __name__ == "__main__":
-    run(build)
+    run(build, menu=build_menu)

@@ -204,5 +204,42 @@ def build(c):
     return [e["name"] for e in ENTITIES]
 
 
+# ============================================================================
+# ===== GUIDED MENU: derived from the data above (usually no need to edit) ===
+# ============================================================================
+# Emits menu_manifest.json so your model ships a "pick a question" menu on the
+# device (spec: LLM Guided-Input Menu). It reuses the SAME data as build(), so
+# filling in ENTITIES / ATTRIBUTE_QUESTIONS is all you need — the menu updates
+# itself. Rule: a template's "{}" slot, once filled with an entity, must be a
+# BYTE-EXACT line the model trained on, so we take the FIRST phrasing of each
+# question list (the canonical one) and swap {name}/{value} for the menu's {}.
+def _slotify(phrasing):
+    """Generator phrasings use {name}/{value}; the manifest uses one {} slot."""
+    return phrasing.replace("{name}", "{}").replace("{value}", "{}")
+
+
+def build_menu(m):
+    # (1) One entity group: identity + the first ask-phrasing of each attribute.
+    g = m.menu_group(TOPIC[:32])
+    g.template(_slotify("Tell me about {name}."), label="About {}")
+    for attr, spec in ATTRIBUTE_QUESTIONS.items():
+        lbl = f"{attr} of {{}}"
+        g.template(_slotify(spec["ask"][0]), label=lbl if len(lbl) <= 20 else None)
+    g.add_entities(e["name"] for e in ENTITIES)
+
+    # (2) A reverse-lookup group per aggregate axis; entities are the values.
+    for attr, spec in REVERSE_LOOKUPS.items():
+        values = sorted({e[attr] for e in ENTITIES if attr in e})
+        if values:
+            m.menu_group(f"By {attr}"[:32]).template(_slotify(spec["ask"][0])) \
+                .add_entities(values)
+
+    # (3) A "General" group of slotless canned questions from the lore.
+    if LORE:
+        gen = m.menu_group("General")
+        for questions, _passage in LORE:
+            gen.template(questions[0])
+
+
 if __name__ == "__main__":
-    run(build)
+    run(build, menu=build_menu)

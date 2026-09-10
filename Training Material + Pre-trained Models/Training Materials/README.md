@@ -53,12 +53,18 @@ topic no package covers. Every package below is built from these same patterns.
 
 ## Catalog
 
+> **Pre-trained model age:** The available `.bin` files are older,
+> known-working builds. They have not been retrained after the recent generator,
+> training-package, converter, and guided-menu updates. Use them as-is for the
+> older behavior, or retrain from the current packages when you want those newer
+> changes reflected inside a model.
+
 | Model | Domain | Preset | Training data | Trained `.bin` | Package |
 |---|---|---|---|---|---|
-| **HardwareOne Help Agent** | HardwareOne ESP32-S3 firmware help (Q&A + `Do:` CLI command suggestions) | HW1HelpAgent192_deep (~7.5 MB INT8) | ~890 Q&A + 1,123 `Do:` pairs, 27 topics | [`HardwareOneHelpAgent.bin`](../Trained%20+%20Ready%20Models/HardwareOneHelpAgent.bin) (6.5 MB) | [`hardwareone-help-agent/`](hardwareone-help-agent/hardwareone_training_package.zip) |
-| **Kanto Pokemon Master** | Generation-1 / Kanto knowledge: the original 151 Pokémon + the Kanto region (pure knowledge Q&A) | HW1HelpAgent192_deep (~7.5 MB INT8) | 5,825 Q&A + 9 prose | _not yet trained_ | [`kanto-pokemon-master/`](kanto-pokemon-master/kanto_pokemon_master_training_package.zip) |
+| **HardwareOne Help Agent** | HardwareOne ESP32-S3 firmware help (Q&A + `Do:` CLI command suggestions) | HW1HelpAgent192_deep (~7.5 MB INT8) | ~890 Q&A + 1,123 `Do:` pairs, 27 topics | [Older build: `HardwareOneHelpAgent.bin`](../Trained%20+%20Ready%20Models/HardwareOne%20On-Device%20Help%20Agent/HardwareOneHelpAgent.bin) (6.5 MB) | [`hardwareone-help-agent/`](hardwareone-help-agent/hardwareone_training_package.zip) |
+| **Kanto Pokemon Master** | Generation-1 / Kanto knowledge: the original 151 Pokémon + the Kanto region (pure knowledge Q&A) | HW1HelpAgent192_deep (~7.5 MB INT8) | 14,241 Q&A + 14 prose | [Older build: `KantoPokemonMasterv2.bin`](../Trained%20+%20Ready%20Models/Kanto%20Region%20Pokemon%20Master/KantoPokemonMasterv2.bin) | [`kanto-pokemon-master/`](kanto-pokemon-master/kanto_pokemon_master_training_package.zip) |
 | **Periodic Table Guide** | The 118 chemical elements: number, symbol, family, group/period, room-temp state (pure knowledge Q&A) | HW1HelpAgent192_deep (~7.5 MB INT8) | 10,000 Q&A + 3 prose | _not yet trained_ | [`periodic-table-guide/`](periodic-table-guide/periodic_table_guide_training_package.zip) |
-| **World Pop Culture** | Worldwide music, film, sports, business, and media figures, plus companies, platforms, leagues/awards, and world cities and countries (pure knowledge Q&A) | HW1HelpAgent192_deep (~7.5 MB INT8) | 2,174 Q&A + 4 prose | _not yet trained_ | [`pop-culture-guide/`](pop-culture-guide/pop_culture_training_package.zip) |
+| **World Pop Culture** | Worldwide music, film, sports, business, and media figures, plus companies, platforms, leagues/awards, and world cities and countries (pure knowledge Q&A) | HW1HelpAgent192_deep (~7.5 MB INT8) | 2,174 Q&A + 4 prose | [Older build: `PopCultureModelGeneral.bin`](../Trained%20+%20Ready%20Models/Pop%20Culture%20Model%20-%20wip%20%28functional%29/PopCultureModelGeneral.bin) | [`pop-culture-guide/`](pop-culture-guide/pop_culture_training_package.zip) |
 
 ---
 
@@ -109,8 +115,9 @@ python Training/train_tiny_model_gpu.py \
 The 151 Pokémon names are kept whole in the tokenizer (`pokemon_special_tokens.txt`)
 so names tokenize atomically instead of as partial fragments.
 
-When converted, name the deployable model `KantoPokemonMaster.bin` in
-`../Trained + Ready Models/`.
+The included older deployable build is `KantoPokemonMasterv2.bin`. Retraining is
+optional and is required only when you want the current corpus or guided menu
+embedded into a newly converted model.
 
 ### Periodic Table Guide
 A knowledge agent for the 118 chemical elements. Generated from a single fact
@@ -169,8 +176,9 @@ python Training/train_tiny_model_gpu.py \
     --out ./out_pop_culture
 ```
 
-When converted, name the deployable model `WorldPopCulture.bin` in
-`../Trained + Ready Models/`.
+The included older deployable build is `PopCultureModelGeneral.bin`. Retraining
+is optional and is required only when you want the current generator or guided
+menu changes embedded into a newly converted model.
 
 ---
 
