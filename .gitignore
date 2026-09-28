@@ -11,3 +11,7 @@ trainer_ckpt/
 /out_*.zip
 # Unzipped working copies of the data packages — the .zip is the tracked data form
 *_training_package/
+# What the build-your-own-model kit writes when run in its own folder
+# (regenerate with TEMPLATE.py, retrain with the trainer)
+**/build_your_own_model/training_data/
+**/build_your_own_model/out_*/

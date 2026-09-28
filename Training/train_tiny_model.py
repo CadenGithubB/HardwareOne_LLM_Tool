@@ -205,9 +205,17 @@ def parse_args() -> argparse.Namespace:
                    help="Hold out fraction F (e.g. 0.1) of blocks for eval + early stopping. "
                         "0 = no eval (default; behaviour unchanged). When >0, --epochs becomes a "
                         "ceiling and training stops once eval loss stops improving — so each "
-                        "dataset self-tunes its epoch count instead of inheriting a fixed default.")
+                        "dataset self-tunes its epoch count instead of inheriting a fixed default. "
+                        "The held-out blocks are never trained; for a Q&A corpus, where each block "
+                        "is a fact, prefer --val-text.")
+    p.add_argument("--val-text", type=Path, nargs="+", default=None, metavar="FILE",
+                   help="Held-out Q&A file(s), same format as --text, for eval + early stopping — e.g. "
+                        "the val.txt the build-your-own-model kit writes (phrasings that are NOT in "
+                        "the corpus). Unlike --val-frac, all of --text is trained. --epochs becomes a "
+                        "ceiling. Needs --text; not with --val-frac.")
     p.add_argument("--early-stopping-patience", type=int, default=5, metavar="N",
-                   help="With --val-frac>0, stop after N epochs with no eval-loss improvement (default 5).")
+                   help="With --val-frac or --val-text, stop after N epochs with no eval-loss "
+                        "improvement (default 5).")
     p.add_argument("--batch-size", type=int, default=8)
     p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--max-samples", type=int, default=None, help="Cap training rows (TinyStories)")
@@ -460,18 +468,25 @@ def _check_filler_prefixes(rows: list[str], source_files: list[str]) -> None:
         print(f"{'='*72}\n")
 
 
+def read_paragraphs(paths: list[Path]) -> list[str]:
+    """Read UTF-8 text files and split them on blank lines, one row per paragraph:
+    the tokenizer then processes each independently and pack_qa_blocks packs each
+    into its own seq_len block. --text and --val-text are both read with this."""
+    rows: list[str] = []
+    for p in paths:
+        if not p.is_file():
+            sys.exit(f"Not a file: {p}")
+        raw = p.read_text(encoding="utf-8", errors="replace")
+        rows.extend(blk.strip() for blk in raw.split("\n\n") if blk.strip())
+    return rows
+
+
 def load_text_dataset(args: argparse.Namespace) -> tuple[list[Path], "Dataset"]:
     """Returns (temp_files_to_cleanup_or_empty, hf_dataset)."""
     from datasets import Dataset
 
     if args.text:
-        rows: list[str] = []
-        for p in args.text:
-            if not p.is_file():
-                sys.exit(f"Not a file: {p}")
-            raw = p.read_text(encoding="utf-8", errors="replace")
-            paragraphs = [blk.strip() for blk in raw.split("\n\n") if blk.strip()]
-            rows.extend(paragraphs)
+        rows = read_paragraphs(args.text)
         print(f"Loaded {len(rows)} text paragraphs from {len(args.text)} file(s).")
 
         # ── Check for filler prefixes in Q: lines ──────────────────────────
@@ -600,6 +615,14 @@ def main() -> None:
         sys.exit("--out is required unless you pass --estimate-only")
     if not args.text and not args.dataset:
         sys.exit("Provide --text PATH or --dataset tiny_stories")
+    if args.val_text:
+        if not args.text:
+            sys.exit("--val-text needs --text: it is held-out Q&A for a text corpus")
+        if args.val_frac:
+            sys.exit("Use --val-text or --val-frac, not both")
+        for p in args.val_text:
+            if not p.is_file():
+                sys.exit(f"Not a file: {p}")
 
     if args.n_embd % args.n_head != 0:
         sys.exit(f"n-embd ({args.n_embd}) must be divisible by n-head ({args.n_head})")
@@ -849,10 +872,13 @@ def main() -> None:
 
     use_cuda = torch.cuda.is_available()
 
-    # Optional held-out eval split → early stopping. With --val-frac 0 (default)
-    # there is no split and behaviour is identical to before. With >0, training
-    # runs up to --epochs but halts when eval loss plateaus, so each dataset
-    # stops at its own right point instead of inheriting a fixed epoch count.
+    # Optional held-out eval set → early stopping. With neither --val-frac nor
+    # --val-text (the default) there is no eval and behaviour is identical to
+    # before. With either, training runs up to --epochs but halts when eval loss
+    # plateaus, so each dataset stops at its own right point instead of
+    # inheriting a fixed epoch count. --val-frac takes its eval blocks OUT of
+    # training; --val-text evaluates on separate held-out phrasings and trains
+    # on everything.
     eval_ds = None
     train_ds = lm_ds
     if args.val_frac and args.val_frac > 0:
@@ -860,6 +886,18 @@ def main() -> None:
         train_ds, eval_ds = split["train"], split["test"]
         print(f"Eval split: {len(train_ds):,} train / {len(eval_ds):,} eval blocks "
               f"({args.val_frac:.0%} held out, seed={args.seed})")
+    elif args.val_text:
+        # Tokenized, filtered and packed exactly like the --text path above
+        # (--val-text requires --text, so pack_qa_blocks is defined).
+        from datasets import Dataset
+        val_tok = Dataset.from_dict({"text": read_paragraphs(args.val_text)}).map(
+            tokenize, batched=True, remove_columns=["text"])
+        val_tok = val_tok.filter(lambda ex: len(ex["input_ids"]) > 0)
+        eval_ds = val_tok.map(pack_qa_blocks, batched=True, remove_columns=val_tok.column_names)
+        if len(eval_ds) == 0:
+            sys.exit("--val-text: no text blocks found in " + ", ".join(map(str, args.val_text)))
+        print(f"Eval set: {len(eval_ds):,} held-out blocks from --val-text "
+              f"(all {len(train_ds):,} train blocks kept)")
 
     # Compute warmup steps: ramp LR from ~0 over the first 6% of training
     _steps_per_epoch = max(1, len(train_ds) // args.batch_size)
@@ -940,7 +978,7 @@ def main() -> None:
     if eval_losses:
         best_eval = min(l for _, l in eval_losses)
         print(f"  Eval loss: first={eval_losses[0][1]:.4f}  last={eval_losses[-1][1]:.4f}  "
-              f"best={best_eval:.4f}  (best checkpoint restored if --val-frac was set)")
+              f"best={best_eval:.4f}  (best checkpoint restored)")
 
     model.eval()
     print("  Key weight stats:")

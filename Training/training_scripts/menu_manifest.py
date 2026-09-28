@@ -13,7 +13,8 @@ entities keep their corpus casing.
 This is a small, self-contained helper the standalone generators
 (generate_pokemon_data.py / generate_elements_data.py) import directly. The kit
 mirrors the same MenuBuilder inside build_your_own_model/corpus_lib.py so a
-copied kit stays self-contained; keep the two in sync with the spec's caps.
+copied kit stays self-contained; keep the caps, encoded_size() and
+check_against() in sync between the two.
 """
 import json
 from pathlib import Path
@@ -29,6 +30,7 @@ MAX_ENTITIES_PER_GROUP = 1024
 MAX_NAME_BYTES = 32
 MAX_Q_BYTES = 120
 MAX_ENTITY_BYTES = 48
+MAX_MENU_BYTES = 32768   # the whole encoded MENU section (the converter's menuBytes cap)
 
 
 def _bytelen(s):
@@ -79,8 +81,24 @@ class MenuBuilder:
     def is_empty(self):
         return not self.groups
 
-    def validate(self):
+    def encoded_size(self):
+        """Bytes of the MENU section the converter encodes (index.html,
+        encodeMenuSection): a 4-byte header; per group a flags byte, the
+        length-prefixed name and two u16 counts; then each template (its "{}"
+        slot becomes one byte) and each entity, length-prefixed."""
+        n = 4
+        for g in self.groups:
+            n += 1 + 1 + _bytelen(g.name) + 2 + 2
+            for t in g.templates:
+                n += 1 + _bytelen(t["q"]) - (1 if SLOT in t["q"] else 0)
+            n += sum(1 + _bytelen(e) for e in g.entities)
+        return n
+
+    def problems(self):
+        """Every cap the converter enforces, as a list of messages."""
         errs = []
+        if not self.groups:
+            errs.append("no groups (the converter rejects an empty menu)")
         if len(self.groups) > MAX_GROUPS:
             errs.append(f"{len(self.groups)} groups > cap {MAX_GROUPS}")
         for g in self.groups:
@@ -100,8 +118,44 @@ class MenuBuilder:
             for e in g.entities:
                 if _bytelen(e) > MAX_ENTITY_BYTES:
                     errs.append(f"group {g.name!r}: entity {e!r} > {MAX_ENTITY_BYTES} bytes")
+        size = self.encoded_size()
+        if size > MAX_MENU_BYTES:
+            errs.append(f"encoded menu is {size} bytes > cap {MAX_MENU_BYTES} "
+                        f"(use fewer or shorter entities)")
+        return errs
+
+    def validate(self):
+        errs = self.problems()
         if errs:
             raise ValueError("menu manifest invalid:\n  " + "\n  ".join(errs))
+
+    def composed(self):
+        """Every question the device menu can show, as (group name, question)."""
+        for g in self.groups:
+            for t in g.templates:
+                if SLOT in t["q"]:
+                    for e in g.entities:
+                        yield g.name, t["q"].replace(SLOT, e, 1)
+                else:
+                    yield g.name, t["q"]
+
+    def check_against(self, questions, conflicted=()):
+        """Compose every question the device menu can show and return a problem
+        for each one that isn't trained verbatim: not in `questions` (the
+        corpus questions), or in `conflicted` (questions given two different
+        answers — which one the model learned depends on emission order)."""
+        problems = []
+        for g in self.groups:
+            for t in g.templates:
+                if SLOT in t["q"] and not g.entities:
+                    problems.append(f"template {t['q']!r} has a {{}} slot but group "
+                                    f"{g.name!r} has no entities")
+        for group, q in self.composed():
+            if q not in questions:
+                problems.append(f"{q!r} is not a question in the corpus (group {group!r})")
+            elif q in conflicted:
+                problems.append(f"{q!r} has conflicting answers in the corpus (group {group!r})")
+        return problems
 
     def to_dict(self):
         return {
