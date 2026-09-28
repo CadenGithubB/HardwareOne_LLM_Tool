@@ -17,7 +17,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "..", "..", "Training Material + Pre-trained Models",
                                 "Training Materials", "build_your_own_model"))
-from corpus_lib import list_join, run
+from corpus_lib import list_join, list_some, render, run, with_article
 
 TOPIC = "world pop culture"
 
@@ -141,10 +141,25 @@ PLACES = [
     {"name": "Egypt",          "kind": "country", "capital": "Cairo",            "continent": "Africa",        "known_for": "the ancient pyramids and the Nile river"},
 ]
 
+# Sports you don't "play": "Usain Bolt competes in track and field."
+SPORT_VERBS = {"gymnastics": "competes in gymnastics", "track": "competes in track and field",
+               "swimming": "competes in swimming", "racing": "competes in motor racing"}
+
+# Plurals that aren't just value + "s".
+PLURALS = {"comedian and actor": "comedians and actors",
+           "YouTuber and content creator": "YouTubers and content creators"}
+
+
+def plural_of(value):
+    return PLURALS.get(value, value + "s")
+
+
+# Answers are str.format templates or functions (corpus_lib.render); {a_value}
+# is the value with "a"/"an" ("an actor", "an R&B").
 ATTRIBUTE_QUESTIONS = {
     "role": {"ask": ["What does {name} do?", "What is {name}'s profession?",
                      "What is {name}'s job?", "What is {name} known as?"],
-             "answer": "{name} is a {value}."},
+             "answer": "{name} is {a_value}."},
     "field": {"ask": ["What field is {name} in?", "What industry is {name} in?",
                       "What area is {name} famous in?"],
               "answer": "{name} works in {value}."},
@@ -156,28 +171,41 @@ ATTRIBUTE_QUESTIONS = {
                   "answer": "{name} is known for {value}."},
     "genre": {"ask": ["What genre is {name}?", "What kind of music does {name} make?",
                       "What style of music is {name}?"],
-              "answer": "{name} is primarily a {value} artist."},
+              "answer": "{name} is primarily {a_value} artist."},
     "sport": {"ask": ["What sport does {name} play?", "What does {name} play?",
                       "What sport is {name} known for?"],
-              "answer": "{name} plays {value}."},
+              "answer": lambda name, value: f"{name} {SPORT_VERBS.get(value, 'plays ' + value)}."},
 }
 
+# Answers lead with the count and name at most 6 people ({list} ends "and N
+# more"), so they stay within the device's 2 sentences / ~30 words. {values}
+# is the plural of {value}.
 REVERSE_LOOKUPS = {
     "field": {"ask": ["Which famous people are in {value}?", "List people in {value}.",
                       "Name some {value} celebrities."],
-              "answer": "In {value}: {list}."},
-    "role": {"ask": ["Which of these people are {value}s?", "List the {value}s.",
-                     "Name the {value}s."],
-             "answer": "The {value}s here are {list}."},
+              "answer": lambda count, value, list: (
+                  f"{list} is the only person in {value} here." if count == 1 else
+                  f"There are {count} people in {value} here: {list}.")},
+    "role": {"ask": ["Which of these people are {values}?", "List the {values}.",
+                     "Name the {values}."],
+             "answer": lambda count, value, values, list: (
+                 f"{list} is the only {value} here." if count == 1 else
+                 f"There are {count} {values} here: {list}.")},
     "genre": {"ask": ["Which musicians make {value} music?", "List the {value} artists.",
                       "Name some {value} musicians."],
-              "answer": "The {value} artists here are {list}."},
-    "sport": {"ask": ["Which athletes play {value}?", "List the {value} players.",
-                      "Name the {value} athletes."],
-              "answer": "In {value}: {list}."},
+              "answer": lambda count, value, list: (
+                  f"{list} is the only {value} artist here." if count == 1 else
+                  f"There are {count} {value} artists here: {list}.")},
+    "sport": {"ask": ["Which athletes play {value}?", "Name the {value} athletes.",
+                      "Who are the {value} athletes?"],
+              "answer": lambda count, value, list: (
+                  f"{list} is the only {value} athlete here." if count == 1 else
+                  f"There are {count} {value} athletes here: {list}.")},
     "from": {"ask": ["Which famous people are from {value}?", "Who here is from {value}?",
                      "Name some celebrities from {value}."],
-             "answer": "From {value}: {list}."},
+             "answer": lambda count, value, list: (
+                 f"{list} is the only person here from {value}." if count == 1 else
+                 f"There are {count} people here from {value}: {list}.")},
 }
 
 SPORT_INFO = {
@@ -303,12 +331,13 @@ def build(c):
         role_desc = f"{e['genre']} {e['role']}" if "genre" in e else e["role"]
         c.qa_variants([f"Who is {name}?", f"Tell me about {name}.",
                        f"What can you tell me about {name}?"],
-                      f"{name} is a {role_desc} known for {e['known_for']}.")
+                      f"{name} is {with_article(role_desc)} known for {e['known_for']}.")
         for attr, spec in ATTRIBUTE_QUESTIONS.items():
             if attr not in e:
                 continue
             c.qa_variants([q.format(name=name) for q in spec["ask"]],
-                          spec["answer"].format(name=name, value=e[attr]))
+                          render(spec["answer"], name=name, value=e[attr],
+                                 a_value=with_article(e[attr])))
 
     for attr, spec in REVERSE_LOOKUPS.items():
         buckets = {}
@@ -316,8 +345,9 @@ def build(c):
             if attr in e:
                 buckets.setdefault(e[attr], []).append(e["name"])
         for value, names in buckets.items():
-            c.qa_variants([q.format(value=value) for q in spec["ask"]],
-                          spec["answer"].format(value=value, list=list_join(names)))
+            c.qa_variants([q.format(value=value, values=plural_of(value)) for q in spec["ask"]],
+                          render(spec["answer"], count=len(names), value=value,
+                                 values=plural_of(value), list=list_some(names), names=names))
 
     for sport in sorted({e["sport"] for e in ENTITIES if "sport" in e}):
         info = SPORT_INFO.get(sport)
@@ -370,7 +400,7 @@ def build(c):
         nm = co["name"]
         c.qa_variants([f"What is {nm}?", f"Describe {nm}.", f"Tell me about {nm}."], co["desc"])
         c.qa_variants([f"What kind of company is {nm}?", f"What does {nm} do?"],
-                      f"{nm} is a {co['kind']}.")
+                      f"{nm} is {with_article(co['kind'])}.")
         if "from" in co:
             c.qa_variants([f"What country is {nm} from?", f"Where is {nm} based?"],
                           f"{nm} is a company from {co['from']}.")
@@ -396,7 +426,8 @@ def build(c):
                    "Oscars", "Academy Awards", "Emmys", "Emmy Awards", "Olympics", "World Cup"]
     extra_tokens = ["R&B", "hip-hop", "West Coast", "United Kingdom", "OpenAI", "Formula 1",
                     "Washington, D.C.", "Mexico City", "New Delhi", "the United Arab Emirates",
-                    "Twitter", "YouTuber", "Olympic", "Antarctica", "Japanese", "Korean", "Spanish"]
+                    "Twitter", "YouTuber", "Olympic", "Antarctica", "Japanese", "Korean", "South Korean",
+                    "Spanish"]
     place_bits = []
     for p in PLACES:
         place_bits += [p.get("country", ""), p["continent"], p.get("capital", "")]

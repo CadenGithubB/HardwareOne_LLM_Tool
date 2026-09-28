@@ -16,6 +16,21 @@ check the corpus, review the facts it flags, then train.
 
 ---
 
+## Hard limits
+
+| Limit | Why |
+|---|---|
+| Answers: at most 2 sentences and ~30 words, on one line | The device stops generating after 2 sentences, and a whole Q&A pair has to fit the model's short context. |
+| Prose passages: at most ~55 words, on one line | Prose is trained in 128-token blocks; longer text gets cut. |
+| One answer per question | A model trained on two answers to one question blends them. |
+| Every fact has a `source`, or is marked `"unverified"` | The model repeats its training data with full confidence, right or wrong. |
+| The model can't reason | Comparisons, superlatives, counts and lists must be computed in Python and stored as facts. |
+| Guided menu: ≤8 groups; ≤64 templates and ≤1024 entities per group; group name ≤32 B, question ≤120 B, entity ≤48 B; ≤32 KB in total | The converter and firmware reject anything bigger. |
+
+Every run checks these (see [What a run checks and writes](#what-a-run-checks-and-writes)).
+
+---
+
 ## Quickstart
 
 Run every command from this folder:
@@ -49,7 +64,14 @@ cd "Training Material + Pre-trained Models/Training Materials/build_your_own_mod
 > whatever it was trained on with full confidence, so **a wrong fact in the
 > data becomes a confidently wrong model.**
 >
-> 1. **Put the facts in `facts.json`, each with a `source`.** Write the
+> Follow the **Hard limits**, the **Rules**, and the **Pattern catalog** in
+> `BUILD_YOUR_OWN_MODEL.md`. Aim for a few hundred to a few thousand distinct
+> facts, each under many phrasings. Work in this order:
+>
+> 1. **Agree the scope with the user.** Which entities does the model cover —
+>    and is that list complete? If it isn't, every superlative must say so
+>    ("the most moons *of the inner planets*").
+> 2. **Put the facts in `facts.json`, each with a `source`.** Write the
 >    entities (each with a canonical name, a consistent set of short
 >    attributes, and a one-sentence `desc`), any entity-to-entity
 >    relationships, and a handful of short lore passages. Take facts from a
@@ -57,7 +79,7 @@ cd "Training Material + Pre-trained Models/Training Materials/build_your_own_mod
 >    comes from your own memory, set `source` to `"unverified"`. **Never
 >    invent or guess a source**: "unverified" is an honest answer, and a person
 >    checks those facts before training.
-> 2. **Fill in the "FILL IN" sections of `TEMPLATE.py`** (it imports
+> 3. **Fill in the "FILL IN" sections of `TEMPLATE.py`** (it imports
 >    `corpus_lib.py`):
 >    - **Attribute questions** — 3–6 distinct phrasings per attribute.
 >    - **Reverse/aggregate lookups** — "which entities have attribute = value?"
@@ -68,17 +90,32 @@ cd "Training Material + Pre-trained Models/Training Materials/build_your_own_mod
 >      superlatives, "what beats what"): compute it in Python, bake in the
 >      answer, and mark it `computed=True`. **Double-check every computed fact
 >      by hand — a wrong one becomes a confidently-wrong model.**
+>    - **Help** — what kinds of questions the model can answer.
 >    - Optionally, one or two `heldout` phrasings per question list. They are
 >      never trained; they test the model on wordings it hasn't seen.
-> 3. **Write `verify()` checks** for whatever a machine can check: required
+>
+>    Make every answer read correctly for every value — "a"/"an", plurals,
+>    zero, yes/no. Use `{a_value}` or an answer function (see **Writing
+>    answers**).
+> 4. **Write `verify()` checks** for whatever a machine can check: required
 >    fields, value ranges, duplicates, and agreement with a downloaded
 >    reference dataset if you have one.
+> 5. **Run `python TEMPLATE.py --strict`** and fix what it reports until it
+>    passes.
+> 6. **Read what you made:** about 30 random Q&As from
+>    `training_data/corpus.txt`, plus every computed answer in
+>    `training_data/UNVERIFIED.md`. Fix anything wrong, awkward or
+>    ungrammatical, then run again.
+> 7. **Report to the user:** the stats the run printed, the facts
+>    `UNVERIFIED.md` lists for them to check, and anything left off the menu.
 >
-> Follow the **Rules** and cover the **Pattern catalog** below. Aim for a few
-> hundred to a few thousand distinct facts, each under many phrasings. You are
-> done when `python TEMPLATE.py --strict` finishes without errors or warnings.
-> Then tell the user which facts `training_data/UNVERIFIED.md` lists, so they
-> can check them before training.
+> **You're done when:**
+> - [ ] `python TEMPLATE.py --strict` finishes without errors or warnings.
+> - [ ] Every `facts.json` entry cites a real source, or is marked
+>   `"unverified"` and reported to the user.
+> - [ ] You've read a sample of `corpus.txt` and every computed answer.
+> - [ ] Superlatives claim only what the data covers, and list every tie.
+> - [ ] The help answer matches what the model can actually answer.
 
 ---
 
@@ -94,13 +131,14 @@ running planet example.
 | **Reverse / aggregate** | "Which planets are rocky?" | Write the LIST out; the model can't derive it. Lead with a count. |
 | **Relationship** | "What comes after Earth?" | Entity → entity. Include the reverse ("before"). |
 | **Multi-hop / chain** | "What does X's parent lead to?" | Precompute the chain. |
-| **Superlative / extreme** | "Which planet has the most moons?" | Compute the max/min/first/last. |
-| **Comparison** | "Which is bigger, Earth or Mars?" | Compute it. Pick a FEW meaningful pairs, never all N×N. |
+| **Superlative / extreme** | "Which inner planet has the most moons?" | Compute the max/min/first/last. List every tie. Scope it to what the data covers. |
+| **Comparison** | "Which is bigger, Earth or Mars?" / "Is Mars bigger than Earth?" | Compute it. Ask both ways round; yes/no questions get "Yes"/"No". Pick a FEW meaningful pairs, never all N×N. |
 | **Count / statistic** | "How many rocky planets are there?" | Aggregate. |
 | **Categorization** | "What are the categories of X?" | If the domain groups things. |
 | **Derived reasoning** | "What is X weak to?" | Apply a RULE (a chart/formula) to the data in Python. Verify. |
 | **Lore / background** | "Tell me about the Solar System." | Short prose, bridged with "tell me about X". |
 | **Procedural / how-to** | "How do you do X?" | If the domain has procedures/steps. |
+| **Help / capabilities** | "What can you do?" | Say what kinds of questions the model can answer. |
 
 ---
 
@@ -132,18 +170,63 @@ running planet example.
    wrong rule table) trains the model to be confidently wrong. Mark them
    `computed=True` so `UNVERIFIED.md` lists them, and hand-check a sample of
    every group.
-7. **Whole-word entity names.** Return your entity names from `build()`; they
-   become special tokens so names stay intact instead of fragmenting.
-8. **Lead aggregate answers with a count** ("There are 4 rocky planets: ...") so
-   a truncated answer is still useful.
-9. **Bridge lore with "tell me about X".** A passage trained only as bare prose
-   has no path from a question to it. Give each passage its questions.
-10. **Avoid combinatorial explosion.** N entities have N² pairs — don't emit all
+7. **Claim only what the data covers.** A superlative over a partial list is
+   wrong in the real world: with 4 of the 8 planets, "Which planet has the most
+   moons?" would teach "Mars" (it's Saturn). Scope the question ("Which inner
+   planet…") and list every entity tied for first.
+8. **Answers must read right for every value.** `"{name} is a {value}."`
+   becomes "is a actor", and `"{value} moon(s)"` becomes "0 moon(s)" — and the
+   model repeats them word for word. Use `{a_value}`, `count_phrase()` and
+   answer functions (see [Writing answers](#writing-answers)), and give a yes/no
+   question a "Yes" or "No" that matches the question: "Is Mars bigger than
+   Earth?" needs "No, Mars is smaller than Earth."
+9. **Whole-word names.** Return your entity names from `build()`, plus
+   multi-word category values ("rocky planet"); they become special tokens so
+   they stay intact instead of fragmenting. Leave out single common words: a
+   special token also matches inside other words ("pop" would cut "popular"
+   apart), and the run warns when one does.
+10. **Lead aggregate answers with a count** ("There are 4 rocky planets: ...") so
+    a truncated answer is still useful. `{list}` names at most 6 and ends
+    "and N more", which keeps long lists within the limits.
+11. **Bridge lore with "tell me about X".** A passage trained only as bare prose
+    has no path from a question to it. Give each passage its questions.
+12. **Avoid combinatorial explosion.** N entities have N² pairs — don't emit all
     of them. Do superlatives, neighbours, and a few meaningful comparisons, not
     every pair.
-11. **Coverage isn't free.** A ~6M model has limited capacity. Core facts under
+13. **Coverage isn't free.** A ~6M model has limited capacity. Core facts under
     many phrasings beat sprawling, rarely-asked coverage. When in doubt, deepen
     (more phrasings of the facts that matter) rather than widen.
+
+---
+
+## Writing answers
+
+An `"answer"` in `ATTRIBUTE_QUESTIONS`, `REVERSE_LOOKUPS` or
+`RELATIONSHIP_QUESTIONS` is either a template or a function:
+
+```python
+"answer": "{name} is {a_value}.",                        # "Mercury is a rocky planet."
+"answer": lambda name, value: f"{name} has {count_phrase(value, 'moon')}.",
+                                                         # "no moons" / "one moon" / "2 moons"
+```
+
+Use a function whenever the wording depends on the value. A function receives
+only the fields it names as parameters:
+
+| Answer for | Fields |
+|---|---|
+| An attribute | `name`, `value`, `a_value` (the value with "a"/"an") |
+| A reverse lookup | `count`, `value`, `list` (at most 6 names, then "and N more"), `names` (all of them) |
+| A relationship | the row's `from`, `rel` and `to` (as a function, take `**r` and read `r["from"]`, since `from` is a Python keyword) |
+
+Helpers in `corpus_lib.py`:
+- `with_article("actor")` → "an actor"; also "an R&B singer", "a unicorn".
+  It's a heuristic: write the article yourself for odd cases like "a NASA
+  mission".
+- `count_phrase(n, "moon")` → "no moons" / "one moon" / "2 moons" (pass the
+  plural when it isn't just "+s": `count_phrase(n, "person", "people")`).
+- `list_some(names)` → "A, B, C, D, E, F, and 5 more"; `list_join(names)` →
+  "A, B, and C".
 
 ---
 
@@ -156,7 +239,7 @@ and the result of each check:
 | Level | Fails the run? | What it covers |
 |---|---|---|
 | **Error** | Always | `facts.json` is well-formed; `verify()` finds no problems; no line break inside a question, answer or passage; every guided-menu question is a trained corpus question with exactly one answer; the menu fits the converter's caps. |
-| **Warning** | Only with `--strict` | Conflicting answers (each listed); answers over 2 sentences or 30 words; prose over 55 words; held-out phrasings that are also trained. |
+| **Warning** | Only with `--strict` | Conflicting answers (each listed); answers over 2 sentences or 30 words; prose over 55 words; held-out phrasings that are also trained; whole-word tokens that would split a longer word. |
 | **Note** | Never | `facts.json` entries without a source; questions left off the menu. |
 
 When the run fails, nothing is written. Otherwise it writes to `training_data/`

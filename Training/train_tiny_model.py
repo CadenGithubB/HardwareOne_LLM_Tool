@@ -801,11 +801,14 @@ def main() -> None:
         print(f"\n[BLOCK DEBUG] Q: token id={q_id}  A: token id={a_id}")
         print(f"[BLOCK DEBUG] Total training blocks: {len(lm_ds)}")
 
-        lengths = [len(ex["input_ids"]) for ex in lm_ds]
+        # Measure content before pack_qa_blocks pads every block to seq_len;
+        # measured after padding, every block looks full-length.
+        lengths = [len(ex["input_ids"]) for ex in tok_ds]
         if lengths:
-            print(f"[BLOCK DEBUG] Block lengths — min={min(lengths)}  max={max(lengths)}  "
+            print(f"[BLOCK DEBUG] Content lengths — min={min(lengths)}  max={max(lengths)}  "
                   f"avg={sum(lengths)/len(lengths):.1f}  "
-                  f"truncated_to_{args.seq_len}={sum(1 for l in lengths if l == args.seq_len)}")
+                  f"at_{args.seq_len}_limit={sum(1 for l in lengths if l >= args.seq_len)} "
+                  f"(truncated or exactly full: no room for the stop token)")
 
         n_has_q  = sum(1 for ex in lm_ds if q_id in ex["input_ids"])
         n_has_a  = sum(1 for ex in lm_ds if a_id in ex["input_ids"])

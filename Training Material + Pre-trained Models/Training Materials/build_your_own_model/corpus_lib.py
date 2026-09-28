@@ -16,9 +16,13 @@ plumbing so every topic gets the same battle-tested behaviour:
   * Whole-word special-token export for your entity names.
   * test_prompts.txt for the trainer's --qa-test-prompts, and val.txt
     (held-out phrasings, never trained) for its --val-text.
+  * Answer helpers: render() (template or function), with_article() ("an
+    actor"), count_phrase() ("no moons" / "one moon"), list_some() ("A, B,
+    and 5 more").
   * Deterministic shuffle + write, with a --out/--tokens-out/--seed/--strict CLI.
 """
 import argparse
+import inspect
 import json
 import random
 import re
@@ -37,6 +41,70 @@ def list_join(items):
     if len(items) == 2:
         return items[0] + " and " + items[1]
     return ", ".join(items[:-1]) + ", and " + items[-1]
+
+
+def list_some(items, limit=6):
+    """list_join for answers that must stay short: the first `limit` items,
+    then "and N more" ('A, B, C, and 5 more'). Lead such an answer with the
+    full count."""
+    items = list(items)
+    if len(items) <= limit:
+        return list_join(items)
+    return list_join(items[:limit] + [f"{len(items) - limit} more"])
+
+
+def count_phrase(n, singular, plural=None):
+    """'no moons' / 'one moon' / '2 moons', for answers that state a count.
+    Pass `plural` when adding "s" is wrong ("person" -> "people")."""
+    plural = plural or singular + "s"
+    if n == 0:
+        return f"no {plural}"
+    if n == 1:
+        return f"one {singular}"
+    return f"{n} {plural}"
+
+
+# Letters whose spoken name starts with a vowel sound ("an MRI", "an R&B hit"),
+# and word starts where the sound doesn't match the first letter.
+_VOWEL_SOUND_LETTERS = set("AEFHILMNORSX")
+_AN_STARTS = ("hour", "honest", "honor", "honour", "heir")
+_A_STARTS = ("eu", "ewe", "one", "once", "unic", "unif", "unio", "uniq", "unit",
+             "univ", "use", "usu", "uten", "uti")
+
+
+def article(phrase):
+    """'a' or 'an' for `phrase`, by sound rather than letter: "an hour", "a
+    unicorn", and initialisms read letter by letter ("an R&B singer", "an NBA
+    player"). A heuristic: write the article yourself for acronyms read as
+    words ("a NASA mission") and other odd cases."""
+    words = phrase.split()
+    word = words[0] if words else ""
+    if word[:1].isupper() and not any(ch.islower() for ch in word):
+        return "an" if word[0] in _VOWEL_SOUND_LETTERS else "a"
+    low = word.lower()
+    if low.startswith(_AN_STARTS):
+        return "an"
+    if low.startswith(_A_STARTS):
+        return "a"
+    return "an" if low[:1] in ("a", "e", "i", "o", "u") else "a"
+
+
+def with_article(phrase):
+    """The phrase with 'a' or 'an' in front: 'an actor', 'a rocky planet'."""
+    return f"{article(phrase)} {phrase}"
+
+
+def render(answer, **fields):
+    """Fill in an answer: a str.format template ("{name} is {a_value}.") or a
+    function that returns the text. A function gets only the fields it names
+    as parameters (e.g. lambda name, value: ...) — use one when the wording
+    depends on the value: plurals, zero, yes/no."""
+    if not callable(answer):
+        return answer.format(**fields)
+    params = inspect.signature(answer).parameters
+    if any(p.kind is p.VAR_KEYWORD for p in params.values()):
+        return answer(**fields)
+    return answer(**{k: v for k, v in fields.items() if k in params})
 
 
 # ── Length budgets ────────────────────────────────────────────────────────
@@ -587,7 +655,37 @@ class Checks:
                 print(f"            ... and {len(items) - limit} more")
 
 
-def check_corpus(c, checks, heldout_problems):
+def split_words(tokens, text):
+    """Words in `text` that a special token would cut apart, as a Counter of
+    (token, word). The tokenizer matches special tokens anywhere, even inside
+    a longer word (leftmost-longest), so a name like "Mars" turns "Marshall"
+    into "Mars" + "hall". A plural "s" right after a token ("rocky planets")
+    is fine."""
+    occurrences = []
+    for t in {t for t in tokens if t}:
+        i = text.find(t)
+        while i != -1:
+            occurrences.append((i, i + len(t)))
+            i = text.find(t, i + 1)
+    occurrences.sort(key=lambda o: (o[0], o[0] - o[1]))   # leftmost, then longest
+    hits, taken_to = Counter(), 0
+    for s, e in occurrences:
+        if s < taken_to:
+            continue   # inside an earlier or longer match, as the tokenizer does
+        taken_to = e
+        plural_s = text[e:e + 1] == "s" and not text[e + 1:e + 2].isalnum()
+        glued_after = text[e:e + 1].isalnum() and not plural_s
+        if (s > 0 and text[s - 1].isalnum()) or glued_after:
+            ws, we = s, e
+            while ws > 0 and text[ws - 1].isalnum():
+                ws -= 1
+            while we < len(text) and text[we].isalnum():
+                we += 1
+            hits[(text[s:e], text[ws:we])] += 1
+    return hits
+
+
+def check_corpus(c, checks, heldout_problems, tokens=()):
     checks.expect([f"{q!r}: kept {_clip(kept, 45)!r}, dropped {_clip(dropped, 45)!r}"
                    for q, kept, dropped in c.conflicts],
                   "warning", "conflicting answers (first kept, later dropped)",
@@ -615,13 +713,22 @@ def check_corpus(c, checks, heldout_problems):
                       "held-out phrasings left out of val.txt",
                       "held-out phrasings are all distinct from the training questions")
 
+    if tokens:
+        text = "\n".join(line for b in c.blocks for line in b)
+        splits = split_words(tokens, text)
+        checks.expect([f"{tok!r} splits {word!r} ({n} times) — also keep {word!r} whole, "
+                       f"or drop {tok!r} from the whole-word tokens"
+                       for (tok, word), n in splits.most_common()],
+                      "warning", "whole-word tokens that would split a longer word",
+                      "no whole-word token splits a longer word")
+
 
 def print_stats(c, names):
     answers = Counter(c._q_answer.values())
     prose = sum(1 for b in c.blocks if len(b) == 1)
     print("Corpus:")
     print(f"  Q&A pairs: {len(c._q_answer)}   prose passages: {prose}   "
-          f"whole-word names: {len(set(names))}")
+          f"whole-word tokens: {len({n for n in names if n})}")
     if answers:
         per = sorted(answers.values())
         singles = sum(1 for n in per if n == 1)
@@ -681,7 +788,7 @@ def run(build, default_out="training_data/corpus.txt",
     if not c._q_answer:
         checks.add("error", "build() added no Q&A pairs")
     heldout, heldout_problems = c.valid_heldout()
-    check_corpus(c, checks, heldout_problems)
+    check_corpus(c, checks, heldout_problems, names)
 
     mb = None
     if menu is not None:
