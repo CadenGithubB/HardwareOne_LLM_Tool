@@ -14,8 +14,10 @@ plumbing so every topic gets the same battle-tested behaviour:
   * facts.json loading; entries without a "source" are listed in
     UNVERIFIED.md for a person to check before training.
   * Whole-word special-token export for your entity names.
-  * test_prompts.txt for the trainer's --qa-test-prompts, and val.txt
-    (held-out phrasings, never trained) for its --val-text.
+  * test_prompts.txt for the trainer's --qa-test-prompts, val.txt (held-out
+    phrasings, never trained) for its --val-text, and categories.json
+    (question types) for training_scripts/eval_qa_accuracy.py.
+  * fact_passages(): each entity's facts restated as short shuffled prose.
   * Answer helpers: render() (template or function), with_article() ("an
     actor"), count_phrase() ("no moons" / "one moon"), list_some() ("A, B,
     and 5 more").
@@ -214,6 +216,32 @@ class Corpus:
         if t:
             _one_line(t, "prose passage")
             self.blocks.append([t])
+
+    def fact_passages(self, statements, count=3, seed=0):
+        """Knowledge augmentation: also train an entity's facts as short prose,
+        `count` times in different sentence orders. "Physics of Language
+        Models" (Part 3.1) found that facts stated several ways, in shuffled
+        order, are far easier to retrieve from questions worded in new ways.
+        Each statement should restate the entity's full name. A passage takes
+        statements in order until the next would pass MAX_PROSE_WORDS; repeat
+        passages are skipped. `seed` (e.g. the entity name) keeps runs stable."""
+        items = [s.strip() for s in statements if s and s.strip()]
+        rng = random.Random(seed)
+        seen = set()
+        for _ in range(count):
+            order = items[:]
+            rng.shuffle(order)
+            passage, words = [], 0
+            for s in order:
+                w = count_words(s)
+                if passage and words + w > MAX_PROSE_WORDS:
+                    continue
+                passage.append(s)
+                words += w
+            text = " ".join(passage)
+            if text and text not in seen:
+                seen.add(text)
+                self.prose(text)
 
     def valid_heldout(self):
         """The held-out pairs that really are held out, plus the problems with
@@ -830,6 +858,14 @@ def run(build, default_out="training_data/corpus.txt",
         prompts_out = out_dir / "test_prompts.txt"
         write_test_prompts(trained, held, prompts_out)
         print(f"Wrote {prompts_out}  (trained: {len(trained)}, held-out: {len(held)})")
+        categories = {q: f["category"] for f in c.facts for q in f["questions"]}
+        categories.update({q: category for q, _a, category in heldout})
+        if any(category != "other" for category in categories.values()):
+            categories_out = out_dir / "categories.json"
+            categories_out.write_text(json.dumps(categories, ensure_ascii=False, indent=1) + "\n",
+                                      encoding="utf-8")
+            print(f"Wrote {categories_out}  (question types for eval_qa_accuracy.py: "
+                  f"{len(set(categories.values()))})")
         if heldout:
             val_out = out_dir / "val.txt"
             _write_blocks(val_out, [[f"Q: {q}", f"A: {a}"] for q, a, _category in heldout])

@@ -234,6 +234,15 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--batch-size", type=int, default=16,
                    help="Per-GPU batch size (default 16 for HardwareOne training data)")
     p.add_argument("--lr",         type=float, default=3e-4)
+    p.add_argument("--weight-decay", type=float, default=0.01,
+                   help="AdamW weight decay (default 0.01). nanoGPT and MobileLLM use 0.1 — compare with "
+                        "training_scripts/eval_qa_accuracy.py before changing it.")
+    p.add_argument("--dropout", type=float, default=None, metavar="P",
+                   help="Dropout for embeddings, attention and residuals. Default: GPT-2's 0.1 for a new "
+                        "model, or the source model's value with --finetune-from.")
+    p.add_argument("--test-rep-penalty", type=float, default=1.5, metavar="P",
+                   help="Repetition penalty for the post-training Q&A test (default 1.5, the device "
+                        "firmware's default). Set it to what your device uses.")
     p.add_argument("--max-samples",type=int,   default=None)
     p.add_argument("--seed",       type=int,   default=42)
     p.add_argument("--grad-accum", type=int,   default=1, metavar="N",
@@ -319,8 +328,55 @@ def train_bpe_tokenizer(text_paths: list[Path], vocab_size: int, out_dir: Path,
     return hf_tok
 
 
+def zero_linear_biases(model) -> int:
+    """Zero and freeze the biases of every block's four linear layers (c_attn,
+    c_proj, c_fc, mlp.c_proj). The converter (index.html) exports only their
+    weights — the .bin has no slot for these biases — so the device runs them
+    as zero. Training them the same way makes the model this script trains and
+    tests the model the device runs. Returns how many values were zeroed."""
+    n = 0
+    for block in model.transformer.h:
+        for layer in (block.attn.c_attn, block.attn.c_proj, block.mlp.c_fc, block.mlp.c_proj):
+            if getattr(layer, "bias", None) is not None:
+                layer.bias.data.zero_()
+                layer.bias.requires_grad_(False)
+                n += layer.bias.numel()
+    return n
+
+
+def set_dropout(model, p: float) -> None:
+    """Set every dropout rate of an already-built model (for --finetune-from)."""
+    import torch
+    for module in model.modules():
+        if isinstance(module, torch.nn.Dropout):
+            module.p = p
+    for key in ("resid_pdrop", "embd_pdrop", "attn_pdrop"):
+        setattr(model.config, key, p)
+
+
+class PadToLongest:
+    """Batch collator: pads each batch only to its longest block — input_ids
+    with EOS, labels with -100 — and passes the labels built in pack_qa_blocks
+    (question masking, the trained stop token) through untouched. Padding at
+    the END of a causal-LM block is never attended to by the tokens before it
+    and is masked out of the loss, so this gives the same loss as padding every
+    block to seq_len, without the wasted compute. A module-level class so
+    DataLoader workers can pickle it."""
+
+    def __init__(self, pad_id: int) -> None:
+        self.pad_id = pad_id
+
+    def __call__(self, features):
+        import torch
+        n = max(len(f["input_ids"]) for f in features)
+        ids = [list(f["input_ids"]) + [self.pad_id] * (n - len(f["input_ids"])) for f in features]
+        labels = [list(f["labels"]) + [-100] * (n - len(f["labels"])) for f in features]
+        return {"input_ids": torch.tensor(ids, dtype=torch.long),
+                "labels": torch.tensor(labels, dtype=torch.long)}
+
+
 def run_qa_test(model, tokenizer, device, label: str, prompts: list[str] | None = None,
-                forbidden: list[str] | None = None) -> None:
+                forbidden: list[str] | None = None, rep_penalty: float = 1.5) -> None:
     """Run generation test with Q&A prompts and print results.
 
     Uses the same stop rules as the ESP32 firmware: halt when the model emits
@@ -388,7 +444,7 @@ def run_qa_test(model, tokenizer, device, label: str, prompts: list[str] | None 
                 attention_mask=attn,
                 max_new_tokens=max_new,
                 do_sample=False,
-                repetition_penalty=1.5,  # match device firmware LLM_DEFAULT_REP_PENALTY
+                repetition_penalty=rep_penalty,  # device firmware default: 1.5 (LLM_DEFAULT_REP_PENALTY)
                 pad_token_id=tokenizer.eos_token_id,
             )
             if stop_ids:
@@ -607,7 +663,6 @@ def main() -> None:
             EarlyStoppingCallback,
             GPT2Config,
             GPT2LMHeadModel,
-            default_data_collator,
             Trainer,
             TrainingArguments,
             set_seed,
@@ -724,7 +779,11 @@ def main() -> None:
         model = GPT2LMHeadModel.from_pretrained(str(ft_dir))
         # Apply any architecture overrides from preset (usually none when fine-tuning)
         n_inner = model.config.n_inner if model.config.n_inner else 4 * model.config.n_embd
+        if args.dropout is not None:
+            set_dropout(model, args.dropout)
     else:
+        dropout = {} if args.dropout is None else dict(
+            resid_pdrop=args.dropout, embd_pdrop=args.dropout, attn_pdrop=args.dropout)
         config = GPT2Config(
             vocab_size=len(tokenizer),
             n_positions=args.seq_len,
@@ -735,8 +794,12 @@ def main() -> None:
             n_inner=n_inner,
             bos_token_id=eos_id,
             eos_token_id=eos_id,
+            **dropout,
         )
         model = GPT2LMHeadModel(config)
+    n_zeroed = zero_linear_biases(model)
+    print(f"Linear-layer biases zeroed and frozen ({n_zeroed:,} values): the converter doesn't "
+          f"export them, so the model trains the way the device runs it.")
 
     # ── VRAM usage after model creation ───────────────────────────────────────
     if has_cuda:
@@ -872,7 +935,7 @@ def main() -> None:
         so the loss only trains on answer prediction.  For multi-turn blocks,
         ALL question portions are masked and ALL answer portions are trained.
         Prose paragraphs have no Q:/A: markers and are trained on fully.
-        Padding is also masked.
+        Blocks are left unpadded; PadToLongest pads each batch (masked).
         """
         blocks = []
         labels_list = []
@@ -890,15 +953,14 @@ def main() -> None:
 
             # Train an explicit stop: append one EOS after the answer and leave
             # it UNMASKED so the model learns to halt instead of rambling past
-            # the answer. (Padding EOS below stays masked.) Only if there's room.
+            # the answer. (Padding EOS, added per batch by PadToLongest, stays
+            # masked.) Only if there's room.
             if len(entry) < block_size:
                 entry = entry + [eos_id]
                 entry_labels = entry_labels + [eos_id]
 
-            # Pad single entry to block_size
-            pad_len = block_size - len(entry)
-            blocks.append(entry + [eos_id] * pad_len)
-            labels_list.append(entry_labels + [-100] * pad_len)
+            blocks.append(entry)
+            labels_list.append(entry_labels)
 
         if _n_empty > 0:
             print(f"  pack_qa_blocks: {_n_empty}/{_n_total} inputs had empty input_ids")
@@ -945,17 +1007,18 @@ def main() -> None:
                 if _empty_count <= 5:
                     print(f"    Empty input_ids at index {i}")
 
-    # CRITICAL: use default_data_collator, NOT DataCollatorForLanguageModeling.
+    # CRITICAL: keep our own labels — NOT DataCollatorForLanguageModeling.
     # The LM collator (mlm=False) IGNORES the labels we built in pack_qa_blocks and
     # regenerates labels = input_ids.clone(), masking only pad_token_id. That threw
     # away BOTH our question-masking (so the model got trained to predict question
     # text) AND — because pad_token was aliased to eos (id 0) — the intentional
     # UNMASKED stop-EOS after each answer (so the model never learned to halt →
-    # the rambling tail). default_data_collator passes our pre-built labels through
+    # the rambling tail). PadToLongest passes our pre-built labels through
     # untouched: questions stay masked (-100), answer + one stop-EOS stay in the
-    # loss, padding stays masked. Blocks are all padded to block_size in
-    # pack_qa_blocks, so no dynamic padding is needed.
-    collator = default_data_collator
+    # loss, padding stays masked. It pads each batch only to its longest block
+    # (most Q&A pairs are a fraction of seq_len), which trains faster with the
+    # same loss.
+    collator = PadToLongest(eos_id)
 
     # Optional held-out eval set → early stopping. With neither --val-frac nor
     # --val-text (the default) there is no eval and behaviour is identical to
@@ -1001,7 +1064,7 @@ def main() -> None:
         data_seed=args.seed,                       # makes the data sampler / shuffle order reproducible
         lr_scheduler_type="cosine",                 # smooth ease-in/ease-out LR curve
         warmup_steps=_warmup_steps,                # ramp LR from ~0 over first 6% of steps
-        weight_decay=0.01,                         # L2 regularization — prevents weight explosion
+        weight_decay=args.weight_decay,            # L2 regularization — prevents weight explosion
         logging_steps=50,
         save_steps=5_000,
         save_total_limit=2,
@@ -1167,7 +1230,8 @@ def main() -> None:
 
     forbidden = ([w.strip() for w in args.scan_forbidden.split(",") if w.strip()]
                  if args.scan_forbidden else None)
-    run_qa_test(inspect_model, tokenizer, device, "Post-training Q&A Test", qa_prompts, forbidden)
+    run_qa_test(inspect_model, tokenizer, device, "Post-training Q&A Test", qa_prompts, forbidden,
+                rep_penalty=args.test_rep_penalty)
 
     print("─" * 60)
 
@@ -1225,6 +1289,9 @@ def main() -> None:
     print("  1) Copy this folder to the machine with the converter")
     print("  2) Open index.html → drag folder in → select INT8 → download model.bin")
     print("  3) Upload model.bin to ESP32 SD card at /sd/llm/")
+    print("Measure accuracy the way the device answers (exact match, per question type):")
+    print(f"  python {Path(__file__).parent / 'training_scripts' / 'eval_qa_accuracy.py'} "
+          f"--model {out_dir} --text <corpus.txt> [--val-text <val.txt>]")
 
 
 if __name__ == "__main__":

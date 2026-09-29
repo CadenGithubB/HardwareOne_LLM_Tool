@@ -150,6 +150,7 @@ See the [catalog README](Training%20Material%20%2B%20Pre-trained%20Models/Traini
 
 ### Training Scripts (`training/training_scripts/`)
 - `run_all_checks.py` — Run all data quality checks at once
+- `eval_qa_accuracy.py` — Exact-match accuracy of a trained model with the device's decoding, per question type (can simulate INT8 and compare repetition penalties)
 - `deep_error_analysis.py` — 12-check structural and content analysis
 - `validate_training_data.py` — Format and command validation
 - `shuffle_training_data.py` — Randomize training block order

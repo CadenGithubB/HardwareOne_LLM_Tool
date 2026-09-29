@@ -218,6 +218,16 @@ def parse_args() -> argparse.Namespace:
                         "improvement (default 5).")
     p.add_argument("--batch-size", type=int, default=8)
     p.add_argument("--lr", type=float, default=3e-4)
+    p.add_argument("--weight-decay", type=float, default=0.01,
+                   help="AdamW weight decay (default 0.01). nanoGPT and MobileLLM use 0.1 — compare with "
+                        "training_scripts/eval_qa_accuracy.py before changing it.")
+    p.add_argument("--dropout", type=float, default=None, metavar="P",
+                   help="Dropout for embeddings, attention and residuals (default: GPT-2's 0.1).")
+    p.add_argument("--qa-test-prompts", type=Path, default=None, metavar="FILE",
+                   help="File with Q&A test prompts (one Q: per line) for the post-training test.")
+    p.add_argument("--test-rep-penalty", type=float, default=1.5, metavar="P",
+                   help="Repetition penalty for the post-training Q&A test (default 1.5, the device "
+                        "firmware's default). Set it to what your device uses.")
     p.add_argument("--max-samples", type=int, default=None, help="Cap training rows (TinyStories)")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument(
@@ -292,39 +302,80 @@ def train_bpe_tokenizer(text_paths: list[Path], vocab_size: int, out_dir: Path,
     return hf_tok
 
 
-def run_qa_test(model, tokenizer, label: str) -> None:
+def zero_linear_biases(model) -> int:
+    """Zero and freeze the biases of every block's four linear layers (c_attn,
+    c_proj, c_fc, mlp.c_proj). The converter (index.html) exports only their
+    weights — the .bin has no slot for these biases — so the device runs them
+    as zero. Training them the same way makes the model this script trains and
+    tests the model the device runs. Returns how many values were zeroed."""
+    n = 0
+    for block in model.transformer.h:
+        for layer in (block.attn.c_attn, block.attn.c_proj, block.mlp.c_fc, block.mlp.c_proj):
+            if getattr(layer, "bias", None) is not None:
+                layer.bias.data.zero_()
+                layer.bias.requires_grad_(False)
+                n += layer.bias.numel()
+    return n
+
+
+class PadToLongest:
+    """Batch collator: pads each batch only to its longest block — input_ids
+    with EOS, labels with -100 — and passes the labels built in pack_qa_blocks
+    (question masking, the trained stop token) through untouched. Padding at
+    the END of a causal-LM block is never attended to by the tokens before it
+    and is masked out of the loss, so this gives the same loss as padding every
+    block to seq_len, without the wasted compute. A module-level class so
+    DataLoader workers can pickle it."""
+
+    def __init__(self, pad_id: int) -> None:
+        self.pad_id = pad_id
+
+    def __call__(self, features):
+        import torch
+        n = max(len(f["input_ids"]) for f in features)
+        ids = [list(f["input_ids"]) + [self.pad_id] * (n - len(f["input_ids"])) for f in features]
+        labels = [list(f["labels"]) + [-100] * (n - len(f["labels"])) for f in features]
+        return {"input_ids": torch.tensor(ids, dtype=torch.long),
+                "labels": torch.tensor(labels, dtype=torch.long)}
+
+
+def run_qa_test(model, tokenizer, label: str, prompts: "list[str] | None" = None,
+                rep_penalty: float = 1.5) -> None:
     """Run generation test with Q&A prompts and print results.
 
-    Stops when the model emits the atomic ``Q:`` token (same heuristic as ESP32 firmware).
+    Decodes like the ESP32 firmware: greedy, with its repetition penalty, and
+    stops when the model emits the atomic ``Q:`` or ``A:`` token.
     """
     import torch
     from transformers import StoppingCriteria, StoppingCriteriaList
 
-    class StopOnQTokenAfterPrompt(StoppingCriteria):
-        def __init__(self, prompt_len: int, q_token_id: int) -> None:
+    class StopOnTokenAfterPrompt(StoppingCriteria):
+        def __init__(self, prompt_len: int, stop_ids: "list[int]") -> None:
             self.prompt_len = prompt_len
-            self.q_token_id = q_token_id
+            self.stop_ids = set(stop_ids)
 
         def __call__(self, input_ids, scores, **kwargs) -> bool:
             if input_ids.shape[1] <= self.prompt_len:
                 return False
-            return int(input_ids[0, -1].item()) == self.q_token_id
+            return int(input_ids[0, -1].item()) in self.stop_ids
 
-    # Domain-neutral sample prompts. For a meaningful test on your own dataset,
-    # use the GPU trainer's --qa-test-prompts, or edit these to your domain.
-    prompts = [
-        "Q: What is this?\nA:",
-        "Once upon a time",
-        "The cat sat on",
-    ]
+    if prompts is None:
+        # Domain-neutral sample prompts. Pass --qa-test-prompts FILE for a
+        # meaningful test on your own dataset.
+        prompts = [
+            "Q: What is this?\nA:",
+            "Once upon a time",
+            "The cat sat on",
+        ]
 
-    q_enc = tokenizer.encode("Q:", add_special_tokens=False)
-    q_token_id = q_enc[0] if q_enc else None
+    stop_ids = [enc[0] for enc in (tokenizer.encode("Q:", add_special_tokens=False),
+                                   tokenizer.encode("A:", add_special_tokens=False)) if enc]
 
     print()
     print(f"  === {label} ===")
-    if q_token_id is not None:
-        print(f"  (generation stops if model emits Q: token id={q_token_id}, same as device firmware)")
+    if stop_ids:
+        print(f"  (greedy, repetition penalty {rep_penalty}; stops on Q:/A: token ids={stop_ids}, "
+              f"same as device firmware)")
     model.eval()
     for prompt_text in prompts:
         try:
@@ -342,29 +393,27 @@ def run_qa_test(model, tokenizer, label: str) -> None:
                 input_ids=input_ids,
                 attention_mask=attn,
                 max_new_tokens=safe_max_new,
-                do_sample=True,
-                temperature=0.5,
-                top_p=0.8,
-                repetition_penalty=1.3,
+                do_sample=False,
+                repetition_penalty=rep_penalty,
                 pad_token_id=tokenizer.eos_token_id,
             )
-            if q_token_id is not None:
+            if stop_ids:
                 gen_kw["stopping_criteria"] = StoppingCriteriaList(
-                    [StopOnQTokenAfterPrompt(prompt_len, q_token_id)]
+                    [StopOnTokenAfterPrompt(prompt_len, stop_ids)]
                 )
             with torch.no_grad():
                 output = model.generate(**gen_kw)
             new_ids = output[0, prompt_len:]
-            ended_on_q = (
-                q_token_id is not None
+            ended_on_stop = (
+                bool(stop_ids)
                 and new_ids.numel() > 0
-                and int(new_ids[-1].item()) == q_token_id
+                and int(new_ids[-1].item()) in stop_ids
             )
-            to_dec = new_ids[:-1] if ended_on_q else new_ids
+            to_dec = new_ids[:-1] if ended_on_stop else new_ids
             answer = tokenizer.decode(to_dec, skip_special_tokens=False)
             if len(answer) > 280:
                 answer = answer[:280] + "..."
-            tail = "  [stopped: Q:]" if ended_on_q else ""
+            tail = "  [stopped: Q:/A:]" if ended_on_stop else ""
             print(f"    {prompt_text}")
             print(f"      -> {answer}{tail}")
             print()
@@ -636,7 +685,6 @@ def main() -> None:
             EarlyStoppingCallback,
             GPT2Config,
             GPT2LMHeadModel,
-            default_data_collator,
             Trainer,
             TrainingArguments,
             set_seed,
@@ -713,8 +761,13 @@ def main() -> None:
         n_inner=n_inner,
         bos_token_id=eos_id,
         eos_token_id=eos_id,
+        **({} if args.dropout is None else dict(
+            resid_pdrop=args.dropout, embd_pdrop=args.dropout, attn_pdrop=args.dropout)),
     )
     model = GPT2LMHeadModel(config)
+    n_zeroed = zero_linear_biases(model)
+    print(f"Linear-layer biases zeroed and frozen ({n_zeroed:,} values): the converter doesn't "
+          f"export them, so the model trains the way the device runs it.")
     if args.gradient_checkpointing:
         model.gradient_checkpointing_enable()
 
@@ -788,9 +841,9 @@ def main() -> None:
                 if len(entry) < block_size:
                     entry = entry + [eos_id]
                     entry_labels = entry_labels + [eos_id]
-                pad_len = block_size - len(entry)
-                blocks.append(entry + [eos_id] * pad_len)
-                labels_list.append(entry_labels + [-100] * pad_len)
+                # Unpadded: PadToLongest pads each batch (padding stays masked).
+                blocks.append(entry)
+                labels_list.append(entry_labels)
             return {"input_ids": blocks, "labels": labels_list}
 
         lm_ds = tok_ds.map(pack_qa_blocks, batched=True, remove_columns=tok_ds.column_names)
@@ -867,11 +920,12 @@ def main() -> None:
             "No training blocks after grouping — use longer text, more TinyStories samples, or lower --seq-len."
         )
 
-    # CRITICAL: default_data_collator, NOT DataCollatorForLanguageModeling — the LM
+    # CRITICAL: keep our own labels, NOT DataCollatorForLanguageModeling — the LM
     # collator discards our pre-built labels (question-masking + the unmasked stop-EOS
     # from pack_qa_blocks), which is what made the model ramble past the answer.
-    # See train_tiny_model_gpu.py for the full explanation. Blocks are pre-padded.
-    collator = default_data_collator
+    # See train_tiny_model_gpu.py for the full explanation. PadToLongest pads each
+    # batch only to its longest block: same loss, less wasted compute.
+    collator = PadToLongest(eos_id)
 
     use_cuda = torch.cuda.is_available()
 
@@ -917,7 +971,7 @@ def main() -> None:
         data_seed=args.seed,                       # makes the data sampler / shuffle order reproducible
         lr_scheduler_type="cosine",                 # smooth ease-in/ease-out LR curve
         warmup_steps=_warmup_steps,                # ramp LR from ~0 over first 6% of steps
-        weight_decay=0.01,                         # L2 regularization
+        weight_decay=args.weight_decay,            # L2 regularization
         logging_steps=20,
         save_steps=10_000,
         save_total_limit=1,
@@ -995,7 +1049,13 @@ def main() -> None:
                   f"mean={float(data.mean()):+.6f} std={float(data.std()):.6f}{nan_warn}")
 
     # Domain Q&A generation test
-    run_qa_test(model, tokenizer, "Post-training Q&A Test")
+    qa_prompts = None
+    if args.qa_test_prompts and args.qa_test_prompts.is_file():
+        lines = args.qa_test_prompts.read_text(encoding="utf-8").strip().splitlines()
+        qa_prompts = [f"{ln.strip()}\nA:" for ln in lines if ln.strip().startswith("Q:")]
+        print(f"  Loaded {len(qa_prompts)} custom test prompts from {args.qa_test_prompts}")
+    run_qa_test(model, tokenizer, "Post-training Q&A Test", qa_prompts,
+                rep_penalty=args.test_rep_penalty)
     print("─" * 60)
 
     print(f"Saving to {out_dir} …")
@@ -1046,6 +1106,9 @@ def main() -> None:
     for f in sorted(out_dir.iterdir()):
         if f.is_file():
             print(f"  {f.name} ({f.stat().st_size / 1024:.1f} KB)")
+    print("Measure accuracy the way the device answers (exact match, per question type):")
+    print(f"  python {Path(__file__).parent / 'training_scripts' / 'eval_qa_accuracy.py'} "
+          f"--model {out_dir} --text <corpus.txt> [--val-text <val.txt>]")
 
 
 if __name__ == "__main__":

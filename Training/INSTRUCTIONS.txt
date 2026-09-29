@@ -120,6 +120,27 @@ Loss should fall from ~7 down to ~0.1-0.3. After training, the script runs a
 generation test. Pass --qa-test-prompts (a file of "Q: ..." lines) so the test
 asks questions from YOUR domain; otherwise it uses a generic placeholder.
 
+Both trainers keep the biases of each block's four linear layers (c_attn,
+c_proj, c_fc, mlp.c_proj) at zero: the converter doesn't export them, so the
+device runs without them — training the same way means the model the trainer
+tests is the model the device runs.
+
+Tuning flags (try one at a time, and compare with the accuracy check below):
+  --weight-decay W       AdamW weight decay (default 0.01)
+  --dropout P            dropout (default 0.1)
+  --test-rep-penalty P   repetition penalty of the post-training test
+                         (default 1.5, the device's default)
+
+Measure accuracy the way the device answers (exact match per question; greedy
+decoding with the device's repetition penalty; answers cut at 2 sentences):
+
+    python Training/training_scripts/eval_qa_accuracy.py --model ./out_mymodel \
+        --text /path/to/YOUR_DATA.txt [--val-text /path/to/held_out.txt]
+
+--rep-penalty 1.5 1.2 1.0 compares repetition penalties; --int8-group 128
+simulates the converter's INT8 weights; --zero-linear-biases shows what a model
+trained before the bias fix loses on the device.
+
 After saving the model, both trainers auto-extract a domain word-list from your
 corpus and write it as domain_vocab.txt into the --out folder. This drives the
 on-device refusal gate (see STEP 4): a prompt that mentions none of your domain's

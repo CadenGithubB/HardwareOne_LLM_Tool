@@ -61,7 +61,8 @@ LORE = FACTS["lore"]
 # "answer" is a template using {name}, {value} and {a_value} (the value with
 # "a"/"an": "a rocky planet", "an ice giant"), or a function of those fields
 # when the wording depends on the value — plurals, zero, yes/no (see "moons").
-# Give 3-6 DISTINCT phrasings per attribute (the way real people would ask).
+# Give 5-10 DISTINCT phrasings per attribute (the way real people would ask:
+# casual and short forms, synonyms) — more wordings, better robustness.
 # The first phrasing that uses only {name} becomes the guided-menu question.
 # Optional "heldout": a phrasing or two that are NOT trained. They go to
 # val.txt and test_prompts.txt to show how the model copes with new wordings.
@@ -71,19 +72,22 @@ ATTRIBUTE_QUESTIONS = {
     # one answer. Keep attribute phrasings specific to the attribute.
     "kind": {
         "ask": ["What kind of object is {name}?", "Is {name} a planet?",
-                "What type of world is {name}?"],
+                "What type of world is {name}?", "What category of planet is {name}?",
+                "What class of world is {name}?"],
         "heldout": ["What sort of object is {name}?"],
         "answer": "{name} is {a_value}.",
     },
     "order": {
         "ask": ["What position is {name} from the Sun?", "Which planet number is {name}?",
-                "Where is {name} in order from the Sun?"],
+                "Where is {name} in order from the Sun?", "How many planets from the Sun is {name}?",
+                "What is {name}'s position from the Sun?"],
         "heldout": ["What number planet is {name}?"],
         "answer": "{name} is planet number {value} from the Sun.",
     },
     "moons": {
         "ask": ["How many moons does {name} have?", "Does {name} have moons?",
-                "What is {name}'s moon count?"],
+                "What is {name}'s moon count?", "Does {name} have any moons?",
+                "How many natural satellites does {name} have?"],
         "heldout": ["How many moons orbit {name}?"],
         # "Mercury has no moons." / "Earth has one moon." / "Mars has 2 moons."
         "answer": lambda name, value: f"{name} has {count_phrase(value, 'moon')}.",
@@ -194,6 +198,7 @@ def build(c):
 
     for e in ENTITIES:
         name = e["name"]
+        statements = [e["desc"]]   # this entity's facts as sentences, for fact_passages
 
         # (a) Identity / description — "What is X?" / "Tell me about X."
         c.qa_variants([f"Tell me about {name}.", f"What is {name}?",
@@ -208,8 +213,14 @@ def build(c):
             fields = {"name": name, "value": e[attr], "a_value": with_article(str(e[attr]))}
             asks = [q.format(**fields) for q in spec["ask"]]
             held = [q.format(**fields) for q in spec.get("heldout", [])]
-            c.qa_variants(asks, render(spec["answer"], **fields),
-                          category=f"attribute:{attr}", heldout=held)
+            answer = render(spec["answer"], **fields)
+            c.qa_variants(asks, answer, category=f"attribute:{attr}", heldout=held)
+            statements.append(answer)
+
+        # The same facts as short prose, 3 times in shuffled order (knowledge
+        # augmentation): a model retrieves facts from new wordings far better
+        # when it has also read them as statements, not only as answers.
+        c.fact_passages(statements, count=3, seed=name)
 
     # (c) Reverse / aggregate lookups.
     for attr, spec in REVERSE_LOOKUPS.items():

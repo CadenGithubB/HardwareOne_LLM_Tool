@@ -81,7 +81,8 @@ cd "Training Material + Pre-trained Models/Training Materials/build_your_own_mod
 >    checks those facts before training.
 > 3. **Fill in the "FILL IN" sections of `TEMPLATE.py`** (it imports
 >    `corpus_lib.py`):
->    - **Attribute questions** — 3–6 distinct phrasings per attribute.
+>    - **Attribute questions** — 5–10 distinct phrasings per attribute
+>      (casual and short forms, synonyms).
 >    - **Reverse/aggregate lookups** — "which entities have attribute = value?"
 >      (write these out; the model can't derive them). Lead answers with a count.
 >    - **Relationship phrasings** — how each kind of link in `facts.json` is
@@ -148,52 +149,57 @@ running planet example.
    the URL or citation it came from, or `"unverified"` if it came from memory.
    `UNVERIFIED.md` lists the unverified ones for a person to check. A made-up
    citation is worse than none: it hides the fact from that check.
-2. **Many phrasings per fact, not lowercase/punctuation duplicates.** Real
+2. **Many phrasings per fact (5–10), not lowercase/punctuation duplicates.** Real
    people ask the same thing many ways ("How many moons does Mars have?" /
    "Does Mars have moons?" / "What's Mars's moon count?"). Give distinct
    wordings. Do NOT add `mars`/`Mars?`/`MARS` variants — casing is handled at
    inference, and lowercased names fragment into tokens the model can't use.
-3. **One answer per question.** The machinery enforces this (first-write-wins):
+3. **State facts as prose too.** `TEMPLATE.py` turns each entity's answers into
+   a few short passages in shuffled order (`fact_passages()`). A model
+   retrieves facts from new wordings far better when it has also read them
+   as statements, not only as answers (Physics of Language Models, Part 3.1).
+   Keep `build()` doing this when you adapt it.
+4. **One answer per question.** The machinery enforces this (first-write-wins):
    if two blocks emit the same question with different answers, the later one
    is dropped, and the run lists every such conflict (`--strict` fails on
    them). Don't rely on it — design questions so each has one true answer.
-4. **Short, factually-dense answers, each on one line.** At most 2 sentences
+5. **Short, factually-dense answers, each on one line.** At most 2 sentences
    and about 30 words: the device stops generating after 2 sentences, and a
    whole Q&A pair has to fit the model's short context. Standalone prose: at
    most about 55 words. A tiny model memorizes tight text far better than long
    flowery prose, and short answers drift less. The run warns past these
    limits and rejects line breaks.
-5. **Precompute all reasoning.** The model cannot compare, aggregate, or apply
+6. **Precompute all reasoning.** The model cannot compare, aggregate, or apply
    rules at run time. Compute those in Python and store the answers as flat
    facts. This is the single biggest lever for making it look "smart".
-6. **Verify computed facts.** A wrong precomputed fact (a bad comparison, a
+7. **Verify computed facts.** A wrong precomputed fact (a bad comparison, a
    wrong rule table) trains the model to be confidently wrong. Mark them
    `computed=True` so `UNVERIFIED.md` lists them, and hand-check a sample of
    every group.
-7. **Claim only what the data covers.** A superlative over a partial list is
+8. **Claim only what the data covers.** A superlative over a partial list is
    wrong in the real world: with 4 of the 8 planets, "Which planet has the most
    moons?" would teach "Mars" (it's Saturn). Scope the question ("Which inner
    planet…") and list every entity tied for first.
-8. **Answers must read right for every value.** `"{name} is a {value}."`
+9. **Answers must read right for every value.** `"{name} is a {value}."`
    becomes "is a actor", and `"{value} moon(s)"` becomes "0 moon(s)" — and the
    model repeats them word for word. Use `{a_value}`, `count_phrase()` and
    answer functions (see [Writing answers](#writing-answers)), and give a yes/no
    question a "Yes" or "No" that matches the question: "Is Mars bigger than
    Earth?" needs "No, Mars is smaller than Earth."
-9. **Whole-word names.** Return your entity names from `build()`, plus
-   multi-word category values ("rocky planet"); they become special tokens so
-   they stay intact instead of fragmenting. Leave out single common words: a
-   special token also matches inside other words ("pop" would cut "popular"
-   apart), and the run warns when one does.
-10. **Lead aggregate answers with a count** ("There are 4 rocky planets: ...") so
+10. **Whole-word names.** Return your entity names from `build()`, plus
+    multi-word category values ("rocky planet"); they become special tokens so
+    they stay intact instead of fragmenting. Leave out single common words: a
+    special token also matches inside other words ("pop" would cut "popular"
+    apart), and the run warns when one does.
+11. **Lead aggregate answers with a count** ("There are 4 rocky planets: ...") so
     a truncated answer is still useful. `{list}` names at most 6 and ends
     "and N more", which keeps long lists within the limits.
-11. **Bridge lore with "tell me about X".** A passage trained only as bare prose
+12. **Bridge lore with "tell me about X".** A passage trained only as bare prose
     has no path from a question to it. Give each passage its questions.
-12. **Avoid combinatorial explosion.** N entities have N² pairs — don't emit all
+13. **Avoid combinatorial explosion.** N entities have N² pairs — don't emit all
     of them. Do superlatives, neighbours, and a few meaningful comparisons, not
     every pair.
-13. **Coverage isn't free.** A ~6M model has limited capacity. Core facts under
+14. **Coverage isn't free.** A ~6M model has limited capacity. Core facts under
     many phrasings beat sprawling, rarely-asked coverage. When in doubt, deepen
     (more phrasings of the facts that matter) rather than widen.
 
@@ -251,6 +257,7 @@ When the run fails, nothing is written. Otherwise it writes to `training_data/`
 | `special_tokens.txt` | Entity names kept whole in the tokenizer — `--special-tokens`. |
 | `test_prompts.txt` | Questions the trainer asks the finished model (`--qa-test-prompts`): trained phrasings from every question type, plus held-out ones. |
 | `val.txt` | Held-out phrasings with their answers, never trained — `--val-text`. Only written when you add `heldout` phrasings. |
+| `categories.json` | The question type of every trained and held-out question, so `eval_qa_accuracy.py` can report accuracy per type. |
 | `menu_manifest.json` | The device's guided "pick a question" menu (see below). |
 | `UNVERIFIED.md` | Facts without a source, and every computed answer, for a person to check before training. |
 
@@ -292,6 +299,24 @@ python ../../../Training/train_tiny_model_gpu.py \
   instead of a hallucination. Clearing both converter fields disables the gate.
   To build or tune the word-list by hand, use
   `Training/training_scripts/extract_domain_vocab.py`.
+
+The trainers keep the biases of each block's four linear layers at zero: the
+converter doesn't export them, so the device runs without them, and training
+the same way makes the model the trainer tests the model the device runs.
+
+Then measure how often the model gives the exact answer, decoding the way the
+device does (greedy, its repetition penalty, answers cut at 2 sentences):
+
+```
+python ../../../Training/training_scripts/eval_qa_accuracy.py --model ./out_mymodel \
+    --text training_data/corpus.txt --val-text training_data/val.txt
+```
+
+It scores trained questions and held-out phrasings per question type (from
+`categories.json`). Add `--rep-penalty 1.5 1.2 1.0` to see whether a lower
+repetition penalty on the device would help, and `--int8-group 128` to include
+the converter's INT8 rounding. Change one thing at a time (data, `--lr`,
+`--weight-decay`, `--dropout`) and keep what raises the held-out score.
 
 The model learns to stop on its own (EOS is trained), so at inference you can
 let it terminate naturally rather than hard-capping length. That relies on each
