@@ -61,11 +61,11 @@ pip install -r requirements.txt
 
 For GPU training (recommended):
 ```bash
-# CUDA 12.1
-pip install torch --index-url https://download.pytorch.org/whl/cu121
+# NVIDIA — install the torch build for your CUDA version first
+pip install torch --index-url https://download.pytorch.org/whl/cu121   # CUDA 12.1
+pip install torch --index-url https://download.pytorch.org/whl/cu124   # CUDA 12.4
 
-# CUDA 12.4
-pip install torch --index-url https://download.pytorch.org/whl/cu124
+# Apple M-series Mac — nothing extra: the stock torch includes the Metal GPU backend
 ```
 
 #### 2. Create your data
@@ -96,7 +96,7 @@ python train_tiny_model_gpu.py \
     # add: --special-tokens /path/to/YOUR_TOKENS.txt   (optional)
 ```
 
-CPU training (slower, use if no GPU):
+CPU training (slower; never uses a GPU, so it also works while yours is busy):
 
 ```bash
 python train_tiny_model.py \
@@ -106,7 +106,7 @@ python train_tiny_model.py \
     --out ./out_mymodel
 ```
 
-Training takes ~30–60 minutes on a modern GPU. CPU training works but is much slower (many hours).
+Training takes ~30–60 minutes on a modern NVIDIA GPU. An Apple M-series Mac trains on its GPU through Metal with the same script; time a short run with `--max-steps 50` before committing to a long one. CPU training works but is much slower (many hours).
 
 #### 4. Convert to ESP32 format
 
@@ -124,7 +124,7 @@ Copy `model.bin` to `/sd/llm/` on the SD card or upload via the web Files page. 
 1. Pick a package from [`Training Materials/`](Training%20Material%20%2B%20Pre-trained%20Models/Training%20Materials/) (HardwareOne Help Agent, Kanto Pokemon Master, Periodic Table Guide)
 2. Unzip it anywhere, e.g. `unzip hardwareone_training_package.zip -d my_model && cd my_model`
 3. The zip contains that model's `training_data/`; trainers and shared tools remain in this repository's `Training/` folder
-4. `pip install -r Training/requirements.txt` (add a CUDA build of torch for GPU training)
+4. `pip install -r Training/requirements.txt` (add a CUDA build of torch for an NVIDIA GPU; an Apple M-series Mac needs nothing extra)
 5. Train using the command in the [catalog README](Training%20Material%20%2B%20Pre-trained%20Models/Training%20Materials/README.md)
 6. Convert with `index.html` (repo root) and deploy as in Path B
 
@@ -133,8 +133,8 @@ Copy `model.bin` to `/sd/llm/` on the SD card or upload via the web Files page. 
 ## What's Included
 
 ### Training (`training/`)
-- `train_tiny_model_gpu.py` — GPU training script (recommended)
-- `train_tiny_model.py` — CPU training script
+- `train_tiny_model_gpu.py` — GPU training script, NVIDIA CUDA or Apple Metal (recommended)
+- `train_tiny_model.py` — CPU training script (never uses a GPU)
 - `INSTRUCTIONS.txt` — Detailed training guide and preset reference
 - `requirements.txt` — Python dependencies
 - `training_scripts/` — Data validation and analysis tools (run against your own data)
@@ -230,7 +230,7 @@ llm status            # Check model state
 ## Requirements
 
 - **Python 3.8+**
-- **PyTorch 2.0+** (CPU or CUDA)
+- **PyTorch 2.0+** (CPU, CUDA, or Apple Metal)
 - **8GB+ RAM** (16GB recommended for GPU training)
 - **Modern browser** (Chrome/Edge/Firefox for the converter)
 - **ESP32-S3** with 8MB PSRAM (for deployment)

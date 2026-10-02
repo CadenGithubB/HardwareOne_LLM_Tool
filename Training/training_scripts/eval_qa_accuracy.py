@@ -204,6 +204,19 @@ def make_answer_fn(model, tokenizer, device, rep_penalty, scope, max_new, contex
     return answer
 
 
+def pick_device(torch, choice):
+    """auto: CUDA, then Apple Metal (mps), then CPU. An explicit choice is checked."""
+    mps = getattr(torch.backends, "mps", None)
+    has_mps = mps is not None and mps.is_available()
+    if choice == "auto":
+        return "cuda" if torch.cuda.is_available() else "mps" if has_mps else "cpu"
+    if choice == "cuda" and not torch.cuda.is_available():
+        sys.exit("--device cuda: no CUDA GPU is available here.")
+    if choice == "mps" and not has_mps:
+        sys.exit("--device mps: the Apple Metal backend is not available here.")
+    return choice
+
+
 def main():
     ap = argparse.ArgumentParser(description="Exact-match accuracy with the device's decoding.")
     ap.add_argument("--model", type=Path, required=True, help="Trained model folder (the trainer's --out).")
@@ -232,6 +245,9 @@ def main():
     ap.add_argument("--show-failures", type=int, default=8,
                     help="Wrong answers to print per question set (first penalty only).")
     ap.add_argument("--json", type=Path, default=None, help="Also write the full results here.")
+    ap.add_argument("--device", choices=("auto", "cuda", "mps", "cpu"), default="auto",
+                    help="Where to run: auto picks CUDA, then Apple Metal (mps), then CPU. "
+                         "Pass cpu to leave a busy GPU alone.")
     args = ap.parse_args()
     for path in [args.model, *args.text, *args.val_text]:
         if not path.exists():
@@ -254,7 +270,7 @@ def main():
     except ImportError as e:
         sys.exit(f"Missing dependency: {e}\nInstall: pip install -r Training/requirements.txt")
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = pick_device(torch, args.device)
     tokenizer = GPT2TokenizerFast.from_pretrained(str(args.model))
     model = GPT2LMHeadModel.from_pretrained(str(args.model)).to(device).eval()
     notes = []
@@ -268,7 +284,8 @@ def main():
     print(f"Model: {args.model}" + (f"  [{'; '.join(notes)}]" if notes else "  [weights as trained]"))
     print(f"Decoding: greedy; stop on Q:/A:/EOS; <= {args.max_new_tokens} new tokens; "
           f"<= {args.max_sentences} sentences; context {context}; "
-          f"repetition penalty on {'question + answer' if args.penalty_scope == 'all' else 'answer'} tokens")
+          f"repetition penalty on {'question + answer' if args.penalty_scope == 'all' else 'answer'} tokens; "
+          f"on {device}")
     if categories:
         print(f"Question types from {cat_path}")
 

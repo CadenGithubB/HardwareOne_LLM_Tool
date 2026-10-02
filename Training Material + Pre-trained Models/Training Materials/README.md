@@ -33,7 +33,7 @@ topic no package covers. Every package below is built from these same patterns.
 1. Unzip it anywhere — you get a `training_data/` folder (corpus, special-tokens,
    test-prompts, and any topic data):
    `unzip <package>.zip -d my_model`
-2. `pip install -r Training/requirements.txt` (add a CUDA build of torch for GPU training)
+2. `pip install -r Training/requirements.txt` (add a CUDA build of torch for an NVIDIA GPU; an Apple M-series Mac needs nothing extra)
 3. Train with the canonical `Training/` trainer, using the command in `Training/INSTRUCTIONS.txt` or the notes below.
    After it saves the model, the trainer also extracts a domain word-list from the
    corpus and writes it as `domain_vocab.txt` in the output folder (pass

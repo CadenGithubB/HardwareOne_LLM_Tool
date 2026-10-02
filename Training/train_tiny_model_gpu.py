@@ -1,20 +1,25 @@
 #!/usr/bin/env python3
 """
-Train the HardwareOne on-device LLM — NVIDIA GPU edition.
+Train the HardwareOne on-device LLM — GPU edition (NVIDIA CUDA or Apple Metal).
 
-GPU-optimized trainer for the HW1HelpAgent192_deep model (dim=192, 16 layers,
-6 heads, FFN=512, seq=128, 4K vocab). Auto-detects CUDA and enables bf16
-(Ampere+) for fast training.
+GPU trainer for the HW1HelpAgent192_deep model (dim=192, 16 layers, 6 heads,
+FFN=512, seq=128, 4K vocab). Uses whichever GPU it finds: an NVIDIA GPU through
+CUDA (bf16 on Ampere+, else fp16) or an Apple M-series GPU through Metal (fp32).
+With neither it falls back to the CPU.
 
 ──────────────────────────────────────────────────────────────────────────────
 SETUP (run once):
 
-  # CUDA 12.1:
+  # NVIDIA — install the torch build for your CUDA version first:
   pip install torch --index-url https://download.pytorch.org/whl/cu121
   pip install -r requirements.txt
 
-  # Verify GPU:
-  python -c "import torch; print(torch.cuda.get_device_name(0))"
+  # Apple M-series Mac — nothing extra; the stock torch includes the Metal
+  # backend (use an arm64 Python, not one running under Rosetta):
+  pip install -r requirements.txt
+
+  # Verify the GPU (prints the backend: cuda, mps = Apple Metal, or cpu):
+  python train_tiny_model_gpu.py --preset HW1HelpAgent192_deep --estimate-only
 
 ──────────────────────────────────────────────────────────────────────────────
 USAGE:
@@ -71,6 +76,11 @@ import random
 import re
 import sys
 from pathlib import Path
+
+# Apple Metal: if PyTorch ever meets an op its Metal backend lacks, run that op on
+# the CPU instead of aborting. Must be set before torch is imported; harmless
+# elsewhere.
+os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
 # Prevent HuggingFace libraries from making network calls when using local text files.
 # Must be set before any transformers/datasets import.
@@ -155,24 +165,48 @@ def apply_preset(ns: argparse.Namespace) -> None:
             setattr(ns, key, val)
 
 
-def detect_gpu() -> tuple[bool, bool, str]:
-    """Returns (has_cuda, supports_bf16, description)."""
+def detect_gpu() -> tuple[str, bool, str]:
+    """Returns (backend, supports_bf16, description). backend is "cuda" for an
+    NVIDIA GPU, "mps" for an Apple M-series GPU (Metal), or "cpu" for neither."""
     try:
         import torch
     except ImportError:
-        return False, False, "torch not installed"
+        return "cpu", False, "torch not installed"
 
-    if not torch.cuda.is_available():
-        return False, False, "no CUDA GPU detected"
+    if torch.cuda.is_available():
+        name = torch.cuda.get_device_name(0)
+        vram_gb = torch.cuda.get_device_properties(0).total_memory / 1024**3
+        # bf16 supported on Ampere (sm_80+) — RTX 3000+, A100, H100, etc.
+        major = torch.cuda.get_device_properties(0).major
+        supports_bf16 = major >= 8
+        return "cuda", supports_bf16, f"{name} ({vram_gb:.1f} GB VRAM)"
 
-    name = torch.cuda.get_device_name(0)
-    vram_gb = torch.cuda.get_device_properties(0).total_memory / 1024**3
+    mps = getattr(torch.backends, "mps", None)
+    if mps is not None and mps.is_available():
+        return "mps", False, "Apple Metal (M-series GPU; shares the Mac's unified memory)"
 
-    # bf16 supported on Ampere (sm_80+) — RTX 3000+, A100, H100, etc.
-    major = torch.cuda.get_device_properties(0).major
-    supports_bf16 = major >= 8
+    return "cpu", False, "no GPU detected (no CUDA, no Apple Metal)"
 
-    return True, supports_bf16, f"{name} ({vram_gb:.1f} GB VRAM)"
+
+def mps_memory_mb() -> tuple[float, float]:
+    """(allocated MB, MB held by the Metal driver) for the Apple Metal backend;
+    zeros on torch builds that don't report it. Metal has no peak counter."""
+    import torch
+    m = getattr(torch, "mps", None)
+    if m is None:
+        return 0.0, 0.0
+    if hasattr(m, "synchronize"):
+        m.synchronize()
+    alloc = m.current_allocated_memory() / 1024**2 if hasattr(m, "current_allocated_memory") else 0.0
+    held = m.driver_allocated_memory() / 1024**2 if hasattr(m, "driver_allocated_memory") else 0.0
+    return alloc, held
+
+
+def default_workers() -> int:
+    """DataLoader workers when --workers isn't given. macOS starts each worker as
+    a fresh process (spawn) at every epoch, and the data is already tokenized, so
+    workers only cost time there."""
+    return 0 if sys.platform == "darwin" else 4
 
 
 def _eval_strategy_key() -> str:
@@ -187,7 +221,7 @@ def _eval_strategy_key() -> str:
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="Train GPT-2 for esp32-llm-converter — NVIDIA GPU edition",
+        description="Train GPT-2 for esp32-llm-converter — GPU edition (NVIDIA CUDA or Apple Metal)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument(
@@ -250,11 +284,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--gradient-checkpointing", action="store_true",
                    help="Trade compute for VRAM (rarely needed for ESP32-size models)")
     p.add_argument("--no-bf16",    action="store_true",
-                   help="Disable bf16 even if GPU supports it (force fp16)")
+                   help="Disable bf16 even if the GPU supports it (force fp16). CUDA only.")
     p.add_argument("--compile",    action="store_true",
-                   help="Enable torch.compile (PyTorch 2.0+ only — ~10-30%% speedup, slower start)")
-    p.add_argument("--workers",    type=int, default=4,
-                   help="DataLoader worker processes (default 4)")
+                   help="Enable torch.compile (PyTorch 2.0+, CUDA only — ~10-30%% speedup, slower start; "
+                        "skipped on Apple Metal)")
+    p.add_argument("--workers",    type=int, default=None,
+                   help="DataLoader worker processes (default 4; 0 on macOS, where each worker is a fresh "
+                        "process started every epoch and the data is already tokenized)")
     p.add_argument("--resume",        type=Path, default=None, metavar="CKPT_DIR",
                    help="Resume training from a checkpoint directory (e.g. ./out_stretch/trainer_ckpt/checkpoint-5000)")
     p.add_argument("--finetune-from", type=Path, default=None, metavar="MODEL_DIR",
@@ -538,14 +574,16 @@ def run_estimate_only(args: argparse.Namespace) -> None:
     if args.n_embd % args.n_head != 0:
         sys.exit(f"n-embd ({args.n_embd}) must be divisible by n-head ({args.n_head})")
 
-    has_cuda, supports_bf16, gpu_desc = detect_gpu()
+    backend, supports_bf16, gpu_desc = detect_gpu()
 
     print("─" * 60)
     print("GPU INFO")
-    print(f"  CUDA available:  {has_cuda}")
+    print(f"  Backend:         {backend}  (cuda = NVIDIA, mps = Apple Metal, cpu = no GPU)")
     print(f"  GPU:             {gpu_desc}")
-    if has_cuda:
+    if backend == "cuda":
         print(f"  bf16 support:    {supports_bf16} ({'Ampere+, will use bf16' if supports_bf16 else 'older GPU, will use fp16'})")
+    elif backend == "mps":
+        print("  Precision:       fp32 (the Trainer's bf16/fp16 mixed precision is CUDA-only)")
     print("─" * 60)
 
     n_inner = args.n_inner if args.n_inner is not None else 4 * args.n_embd
@@ -678,8 +716,11 @@ def main() -> None:
     set_seed(args.seed)
 
     # ── GPU detection ─────────────────────────────────────────────────────────
-    has_cuda, supports_bf16, gpu_desc = detect_gpu()
+    backend, supports_bf16, gpu_desc = detect_gpu()
+    has_cuda = backend == "cuda"
     print("─" * 60)
+    use_bf16 = use_fp16 = False
+    total_vram_gb = 0.0
     if has_cuda:
         print(f"GPU: {gpu_desc}")
         use_bf16 = supports_bf16 and not args.no_bf16
@@ -687,12 +728,19 @@ def main() -> None:
         print(f"Precision: {'bf16 (Ampere+)' if use_bf16 else 'fp16'}")
         total_vram_gb = torch.cuda.get_device_properties(0).total_memory / 1024**3
         print(f"VRAM total: {total_vram_gb:.1f} GB")
+    elif backend == "mps":
+        print(f"GPU: {gpu_desc}")
+        print("Precision: fp32 (the Trainer's bf16/fp16 mixed precision is CUDA-only; fine at this model size)")
+        recommended = getattr(getattr(torch, "mps", None), "recommended_max_memory", None)
+        if recommended:
+            print(f"Unified memory the GPU may use: {recommended() / 1024**3:.1f} GB "
+                  f"(shared with everything else running on the Mac)")
     else:
-        print("WARNING: No CUDA GPU detected — falling back to CPU.")
-        print("Training will be slow. Use the regular train_tiny_model.py for CPU.")
-        use_bf16 = False
-        use_fp16 = False
-        total_vram_gb = 0.0
+        print("WARNING: No GPU detected (no CUDA, no Apple Metal) — falling back to CPU.")
+        print("Training will be slow. train_tiny_model.py is the CPU edition.")
+    if args.workers is None:
+        args.workers = default_workers()
+    print(f"DataLoader workers: {args.workers}")
     print("─" * 60)
 
     out_dir = args.out.resolve()
@@ -801,16 +849,21 @@ def main() -> None:
     print(f"Linear-layer biases zeroed and frozen ({n_zeroed:,} values): the converter doesn't "
           f"export them, so the model trains the way the device runs it.")
 
-    # ── VRAM usage after model creation ───────────────────────────────────────
-    if has_cuda:
-        model = model.cuda()
-        torch.cuda.synchronize()
-        allocated_mb = torch.cuda.memory_allocated() / 1024**2
-        reserved_mb  = torch.cuda.memory_reserved()  / 1024**2
+    # ── GPU memory after model creation ───────────────────────────────────────
+    if backend != "cpu":
+        model = model.to(backend)
         n_params_now = sum(p.numel() for p in model.parameters())
         bytes_per_param = 2 if (use_bf16 or use_fp16) else 4
         model_mb = n_params_now * bytes_per_param / 1024**2
         print(f"Model weights: ~{model_mb:.0f} MB ({bytes_per_param}-byte {'bf16' if use_bf16 else 'fp16' if use_fp16 else 'fp32'})")
+    if backend == "mps":
+        allocated_mb, held_mb = mps_memory_mb()
+        print(f"GPU memory after model load: {allocated_mb:.0f} MB allocated / {held_mb:.0f} MB held by the Metal driver")
+        print("─" * 60)
+    if has_cuda:
+        torch.cuda.synchronize()
+        allocated_mb = torch.cuda.memory_allocated() / 1024**2
+        reserved_mb  = torch.cuda.memory_reserved()  / 1024**2
         print(f"VRAM after model load: {allocated_mb:.0f} MB allocated / {reserved_mb:.0f} MB reserved / {total_vram_gb*1024:.0f} MB total")
         headroom_mb = total_vram_gb * 1024 - allocated_mb
         # rough guidance: each batch of 128-token sequences needs ~headroom/bs MB
@@ -820,7 +873,10 @@ def main() -> None:
             print(f"Tip: {total_vram_gb:.0f} GB VRAM available — try --batch-size {suggested_bs} for faster training")
         print("─" * 60)
 
-    # torch.compile — PyTorch 2.0+ only, ~10-30% speedup after warm-up
+    # torch.compile — PyTorch 2.0+ only, ~10-30% speedup after warm-up (CUDA)
+    if args.compile and backend == "mps":
+        print("NOTE: --compile is skipped on Apple Metal (torch.compile support there is still experimental).")
+        args.compile = False
     if args.compile:
         if hasattr(torch, "compile"):
             print("Applying torch.compile (first batch will be slow — this is normal)…")
@@ -1123,6 +1179,9 @@ def main() -> None:
     if has_cuda:
         peak_mb = torch.cuda.max_memory_allocated() / 1024**2
         print(f"Peak VRAM used during training: {peak_mb:.0f} MB / {total_vram_gb*1024:.0f} MB total")
+    elif backend == "mps":
+        allocated_mb, held_mb = mps_memory_mb()
+        print(f"GPU memory after training: {allocated_mb:.0f} MB allocated / {held_mb:.0f} MB held by the Metal driver")
 
     # ── Post-training diagnostics ─────────────────────────────────────────────
     print("─" * 60)

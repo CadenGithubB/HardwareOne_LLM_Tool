@@ -43,12 +43,20 @@ All paths share one dependency file. From the repo root:
 
     pip install -r Training/requirements.txt
 
-On GPU machines, install PyTorch for your CUDA version first:
+On an NVIDIA machine, install PyTorch for your CUDA version first:
 
     CUDA 12.1:  pip install torch --index-url https://download.pytorch.org/whl/cu121
     CUDA 12.4:  pip install torch --index-url https://download.pytorch.org/whl/cu124
 
-Verify GPU (optional):  python -c "import torch; print(torch.cuda.is_available())"
+On an Apple M-series Mac nothing extra is needed: the stock torch from
+requirements.txt includes the Metal GPU backend. Use an arm64 Python, not one
+running under Rosetta.
+
+Verify the GPU (optional):
+
+    python Training/train_tiny_model_gpu.py --preset HW1HelpAgent192_deep --estimate-only
+
+It prints the backend it will train on: cuda (NVIDIA), mps (Apple Metal) or cpu.
 
 
 STEP 2 — Get your training data (Path B or C)
@@ -88,6 +96,15 @@ STEP 3 — Train the model (Path B or C)
 Use HW1HelpAgent192_deep for best quality: 16 layers, dim=192, 6 heads, FFN=512,
 seq=128. (The preset names are historical labels; they work for any domain.)
 
+Which trainer?
+
+    NVIDIA GPU, any OS         Training/train_tiny_model_gpu.py   CUDA; bf16 on RTX 3000+ / A-series, else fp16
+    Apple M-series Mac         Training/train_tiny_model_gpu.py   Metal GPU, fp32; slower than an NVIDIA card
+    No GPU, or keep it free    Training/train_tiny_model.py       CPU only, even when a GPU is present
+
+The commands below are the same on every platform. Both trainers accept the
+same data flags; the CPU one just has no GPU options.
+
 PATH B example (your own files, run from the repo root):
 
     python Training/train_tiny_model_gpu.py \
@@ -106,7 +123,8 @@ PATH C example (unzipped Kanto data package, run from the repo root):
         --epochs 250 --lr 3e-4 --batch-size 16 \
         --out ./out_kanto
 
-CPU training (slow, use only if no GPU available):
+CPU training (slow; this edition never touches a GPU, so it also works while
+yours is busy with something else):
 
     python Training/train_tiny_model.py \
         --preset HW1HelpAgent192_deep \

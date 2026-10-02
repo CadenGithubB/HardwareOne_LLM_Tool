@@ -3,7 +3,9 @@
 Train the HardwareOne on-device LLM — CPU edition.
 
 CPU trainer for the HW1HelpAgent192_deep model (dim=192, 16 layers, 6 heads,
-FFN=512, seq=128, 4K vocab). Slow — use the GPU trainer if possible.
+FFN=512, seq=128, 4K vocab). Trains on the CPU even when a GPU is present, so a
+GPU that is busy with something else stays free. Slow — use
+train_tiny_model_gpu.py (NVIDIA CUDA or Apple Metal) when you can.
 
 ──────────────────────────────────────────────────────────────────────────────
 SETUP (run once):
@@ -153,6 +155,17 @@ def _eval_strategy_key() -> str:
     from transformers import TrainingArguments
     params = inspect.signature(TrainingArguments.__init__).parameters
     return "eval_strategy" if "eval_strategy" in params else "evaluation_strategy"
+
+
+def _cpu_only_kw() -> dict:
+    """Keep the Trainer on the CPU. Left alone, it silently moves training to a
+    CUDA or Apple Metal GPU when one exists; the GPU edition is the script that
+    handles those properly, and this one must leave a busy GPU free. The flag was
+    no_cuda until transformers 4.34 and use_cpu since (no_cuda is gone in 5.x)."""
+    import inspect
+    from transformers import TrainingArguments
+    params = inspect.signature(TrainingArguments.__init__).parameters
+    return {"use_cpu": True} if "use_cpu" in params else {"no_cuda": True}
 
 
 def parse_args() -> argparse.Namespace:
@@ -927,7 +940,8 @@ def main() -> None:
     # batch only to its longest block: same loss, less wasted compute.
     collator = PadToLongest(eos_id)
 
-    use_cuda = torch.cuda.is_available()
+    # This edition trains on the CPU on purpose (see _cpu_only_kw).
+    print("Device: CPU (this edition never uses a GPU; train_tiny_model_gpu.py does)")
 
     # Optional held-out eval set → early stopping. With neither --val-frac nor
     # --val-text (the default) there is no eval and behaviour is identical to
@@ -976,7 +990,8 @@ def main() -> None:
         save_steps=10_000,
         save_total_limit=1,
         prediction_loss_only=True,
-        fp16=use_cuda,
+        fp16=False,                                # CPU edition: no mixed precision
+        **_cpu_only_kw(),                          # stay on the CPU even when a GPU is present
         gradient_checkpointing=args.gradient_checkpointing,
         report_to="none",
     )

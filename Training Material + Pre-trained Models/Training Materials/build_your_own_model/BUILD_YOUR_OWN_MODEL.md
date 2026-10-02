@@ -266,8 +266,8 @@ When the run fails, nothing is written. Otherwise it writes to `training_data/`
 ## STEP 3: train
 
 Once the generator passes, train the model with the canonical tiny-LLM trainer
-in the repo's `Training/` folder (`train_tiny_model_gpu.py` for GPU,
-`train_tiny_model.py` for CPU). From this folder:
+in the repo's `Training/` folder (`train_tiny_model_gpu.py` for an NVIDIA or
+Apple M-series GPU, `train_tiny_model.py` for CPU only). From this folder:
 
 ```
 python ../../../Training/train_tiny_model_gpu.py \
