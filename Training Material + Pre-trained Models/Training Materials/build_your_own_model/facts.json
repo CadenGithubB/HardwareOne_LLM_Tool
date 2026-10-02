@@ -1,0 +1,49 @@
+{
+  "topic": "the Solar System",
+  "entities": [
+    {
+      "name": "Mercury",
+      "order": 1,
+      "kind": "rocky planet",
+      "moons": 0,
+      "diameter_km": 4879,
+      "desc": "Mercury is the first planet from the Sun and the smallest, a rocky world with no moons.",
+      "source": "NASA NSSDCA Mercury Fact Sheet, https://nssdc.gsfc.nasa.gov/planetary/factsheet/mercuryfact.html (diameter = 2 x volumetric mean radius)"
+    },
+    {
+      "name": "Venus",
+      "order": 2,
+      "kind": "rocky planet",
+      "moons": 0,
+      "diameter_km": 12104,
+      "desc": "Venus is the second planet from the Sun, a rocky world with a thick, hot atmosphere and no moons.",
+      "source": "NASA NSSDCA Venus Fact Sheet, https://nssdc.gsfc.nasa.gov/planetary/factsheet/venusfact.html (diameter = 2 x volumetric mean radius)"
+    },
+    {
+      "name": "Earth",
+      "order": 3,
+      "kind": "rocky planet",
+      "moons": 1,
+      "diameter_km": 12742,
+      "desc": "Earth is the third planet from the Sun and the only known world with life. It has one moon.",
+      "source": "NASA NSSDCA Earth Fact Sheet, https://nssdc.gsfc.nasa.gov/planetary/factsheet/earthfact.html (diameter = 2 x volumetric mean radius)"
+    },
+    {
+      "name": "Mars",
+      "order": 4,
+      "kind": "rocky planet",
+      "moons": 2,
+      "diameter_km": 6779,
+      "desc": "Mars is the fourth planet from the Sun, a cold rocky world with two small moons.",
+      "source": "NASA NSSDCA Mars Fact Sheet, https://nssdc.gsfc.nasa.gov/planetary/factsheet/marsfact.html (diameter = 2 x volumetric mean radius)"
+    }
+  ],
+  "relationships": [],
+  "lore": [
+    {
+      "questions": ["Tell me about the Solar System.", "What is the Solar System?", "Describe the Solar System."],
+      "passage": "The Solar System is the Sun and everything orbiting it. Mercury, Venus, Earth, and Mars are its small rocky inner planets; the outer planets are gas and ice giants.",
+      "source": "unverified: written from general knowledge for this example"
+    }
+  ]
+}

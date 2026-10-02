@@ -20,10 +20,17 @@ Usage:
 """
 import argparse
 import random
+import sys
 from pathlib import Path
 
 from pokemon_gen1_supplement import CATCH_LOC, DEX_ENTRY
 from menu_manifest import MenuBuilder
+
+# with_article(): "an Electric-type", "an S.S. Ticket" — shared with the
+# build-your-own-model kit.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "Training Material + Pre-trained Models"
+                       / "Training Materials" / "build_your_own_model"))
+from corpus_lib import with_article  # noqa: E402
 
 VALID_TYPES = {
     "Normal", "Fire", "Water", "Grass", "Electric", "Ice", "Fighting",
@@ -570,43 +577,42 @@ CAPABILITIES = [
 LORE = [
     (["Tell me about Kanto.", "Describe the Kanto region.", "What is the Kanto region?",
       "Tell me about the Kanto region.", "Where does the game take place?"],
-     "The Kanto region is the setting of Pokemon Red, Blue, and Yellow. It has nine cities, a network of routes, and several caves. Trainers travel from Pallet Town to collect eight gym badges and challenge the Elite Four."),
+     "The Kanto region is the setting of Pokemon Red, Blue, and Yellow. Trainers travel its towns and routes from Pallet Town, earning eight gym badges to challenge the Elite Four."),
     (["What is a Pokemon trainer's goal?", "What does a Pokemon trainer do?",
       "Tell me about being a trainer.", "What is the point of the game?"],
-     "A Pokemon trainer's goal is to catch and train Pokemon, defeat the eight gym leaders, and become the Champion. Along the way the trainer fills the Pokedex, which records all 151 Kanto Pokemon."),
+     "A Pokemon trainer's goal is to catch and train Pokemon, beat the eight gym leaders, and become the Champion, filling the Pokedex of all 151 Kanto Pokemon along the way."),
     (["Explain type matchups.", "How do type matchups work?", "Tell me about type effectiveness.",
       "How do types work in battle?"],
-     "Type matchups decide battles. Water beats Fire, Fire beats Grass, and Grass beats Water in a rock-paper-scissors triangle. Electric beats Water and Flying, while Ground is immune to Electric attacks."),
+     "Type matchups decide battles: Water beats Fire, Fire beats Grass, and Grass beats Water. Electric beats Water and Flying, while Ground is immune to Electric attacks."),
     (["Tell me about evolution stones.", "How do evolution stones work?", "What are evolution stones?",
       "Which Pokemon use evolution stones?"],
-     "Evolution stones let certain Pokemon evolve instantly. The Fire, Water, Thunder, Leaf, and Moon Stones each evolve a specific set of Pokemon. Eevee can become Vaporeon, Jolteon, or Flareon depending on the stone used."),
-    (["Which Pokemon evolve by trading?", "Tell me about trade evolution.", "How does trade evolution work?",
+     "Evolution stones make certain Pokemon evolve instantly: the Fire, Water, Thunder, Leaf, and Moon Stones each work on specific Pokemon. Eevee becomes Vaporeon, Jolteon, or Flareon depending on the stone."),
+    (["Tell me about trade evolution.", "How does trade evolution work?",
       "What Pokemon evolve when traded?"],
      "Some Pokemon only evolve when traded with another player, including Kadabra into Alakazam, Machoke into Machamp, Graveler into Golem, and Haunter into Gengar."),
-    (["Tell me about Team Rocket.", "Who is Team Rocket?", "Describe Team Rocket.", "What is Team Rocket?"],
-     "Team Rocket is a criminal organization led by Giovanni. They appear at Mt. Moon, the Game Corner hideout, the Pokemon Tower, and Silph Co., stealing Pokemon for profit until the player drives them off."),
+    (["Describe Team Rocket.", "What is Team Rocket?", "What does Team Rocket do?"],
+     "Team Rocket is Giovanni's criminal gang, which steals Pokemon at the Game Corner hideout, the Pokemon Tower, and Silph Co."),
     (["Tell me about the legendary birds.", "Who are the legendary birds?", "Describe the legendary birds.",
       "What are the legendary birds of Kanto?"],
-     "The legendary birds are Articuno, Zapdos, and Moltres. Articuno lives in the Seafoam Islands, Zapdos in the Power Plant, and Moltres on Victory Road or Mt. Ember depending on the game."),
-    (["Tell me about Mewtwo.", "Who is Mewtwo?", "Tell me about Mew.", "What is the strongest Pokemon?"],
+     "The legendary birds are Articuno, Zapdos, and Moltres. Articuno lives in the Seafoam Islands, Zapdos in the Power Plant, and Moltres on Victory Road."),
+    (["Tell me about Mew and Mewtwo.", "How was Mewtwo created?", "What is Mewtwo's origin?"],
      "Mew is the 151st Pokemon, a rare mythical Psychic-type. Mewtwo was created by scientists from Mew's genes and is the strongest Pokemon in Kanto, waiting in Cerulean Cave."),
     (["Why were Psychic types so strong?", "Tell me about the Psychic type glitch.",
       "What was the Ghost Psychic bug?"],
-     "In the original Red and Blue games, a programming quirk made Ghost-type moves do nothing to Psychic types, even though Ghost was meant to be super effective against them. Psychic types were dominant as a result."),
+     "In Red and Blue, a programming quirk made Ghost moves do nothing to Psychic types instead of being super effective. That left Psychic types dominant."),
     (["Tell me about the gym leaders.", "How many gyms are in Kanto?", "What are the Kanto gym leaders?",
       "Tell me about the Kanto gyms."],
-     "The eight Kanto gym leaders are Brock, Misty, Lt. Surge, Erika, Koga, Sabrina, Blaine, and Giovanni. Defeating a leader earns a badge, and all eight badges are needed to enter the Pokemon League."),
-    (["Tell me about the Elite Four.", "Who are the Elite Four?", "What is the Pokemon League?",
-      "How do you become Champion?"],
-     "The Pokemon League is guarded by the Elite Four: Lorelei, Bruno, Agatha, and Lance. A trainer must beat all four in a row and then defeat the Champion to become the new Champion of Kanto."),
+     "The eight Kanto gym leaders are Brock, Misty, Lt. Surge, Erika, Koga, Sabrina, Blaine, and Giovanni, and their eight badges open the Pokemon League."),
+    (["Tell me about the Elite Four.", "What is the Pokemon League?", "How do you become Champion?"],
+     "The Pokemon League is guarded by the Elite Four: Lorelei, Bruno, Agatha, and Lance. Beat all four in a row, then the Champion, to become Champion of Kanto."),
     (["Tell me about Poke Balls.", "How do Poke Balls work?", "What kinds of Poke Balls are there?",
       "How do you catch a Pokemon?"],
-     "Poke Balls are used to catch wild Pokemon. The basic Poke Ball is weakest, the Great Ball and Ultra Ball catch better, and the Master Ball never fails. A weakened or status-afflicted Pokemon is easier to catch."),
-    (["Who is Professor Oak?", "Tell me about Professor Oak.", "What are the starter Pokemon?",
-      "How do you start your journey?"],
+     "Poke Balls catch wild Pokemon; the Master Ball never fails, and Great and Ultra Balls beat the basic Poke Ball. A weakened or status-afflicted Pokemon is easier to catch."),
+    (["How do you start your journey?", "What does Professor Oak give new trainers?",
+      "How does a new trainer get a Pokemon?"],
      "Professor Oak is the Pokemon researcher of Pallet Town. He gives new trainers a first partner, either Bulbasaur, Charmander, or Squirtle, along with a Pokedex to fill while traveling Kanto."),
     (["Tell me about the Safari Zone.", "What is the Safari Zone?", "How does the Safari Zone work?"],
-     "The Safari Zone is a special reserve where trainers use Safari Balls and can throw bait or rocks instead of battling. It holds Pokemon found nowhere else, and each visit is limited to a fixed number of steps."),
+     "The Safari Zone is a reserve where trainers throw Safari Balls, bait, or rocks instead of battling. It has Pokemon found nowhere else, and each visit has a step limit."),
 ]
 
 # ── Phrasing templates ───────────────────────────────────────────────────
@@ -882,7 +888,7 @@ def about_answer(name, num, types, into, evolves_from):
         evo = f" It evolves from {evolves_from[name]}."
     else:
         evo = ""
-    return f"{name} is a {t}-type Pokemon, number {num} in the Kanto Pokedex.{evo}{legend}"
+    return f"{name} is {with_article(t + '-type')} Pokemon, number {num} in the Kanto Pokedex.{evo}{legend}"
 
 
 class Corpus:
@@ -969,10 +975,11 @@ def build_menu():
     types.add_entities(t for t in TYPES if t in present)
 
     # Items: identity questions over the item roster (inline phrasings, first
-    # two — there is no ITEMS *_Q list).
+    # two — there is no ITEMS *_Q list). They say "the": one template serves
+    # every item, and a fixed "a" or "an" would be wrong for some of them.
     items = m.menu_group("Items")
-    items.template("What is a {}?")
-    items.template("What does a {} do?")
+    items.template("Tell me about the {}.")
+    items.template("What does the {} do?")
     items.add_entities(name for name, _fact in ITEMS)
 
     # General: slotless canned questions. Assert each is a real corpus
@@ -1015,7 +1022,7 @@ def main():
     # Per-Pokemon facts
     for num, name, types, into in POKEMON:
         c.qa_variants([q.format(name=name) for q in TYPE_Q],
-                      f"{name} is a {type_phrase(types)}-type Pokemon.")
+                      f"{name} is {with_article(type_phrase(types) + '-type')} Pokemon.")
         c.qa_variants([q.format(name=name) for q in NUM_Q],
                       f"{name} is number {num} in the Kanto Pokedex.")
         c.qa_variants([q.format(name=name) for q in INTO_Q],
@@ -1170,7 +1177,7 @@ def main():
             ans = f"{t}-type Pokemon include " + ", ".join(ex[:-1]) + ", and " + ex[-1] + "."
         c.qa_variants([f"Which Pokemon are {t}-type?",
                        f"Name some {t}-type Pokemon.",
-                       f"Give me a {t}-type Pokemon.",
+                       f"Give me {with_article(t + '-type')} Pokemon.",
                        f"What are the {t}-type Pokemon?",
                        f"what are {t.lower()} pokemon?",
                        f"Which Pokemon are {t}?",
@@ -1182,19 +1189,22 @@ def main():
     defender_immune = {}
     for att, dfn in IMMUNITIES:
         c.qa_variants([f"Can {att} moves hit {dfn} Pokemon?",
-                       f"Do {att} attacks affect {dfn} types?",
-                       f"Are {dfn} Pokemon immune to {att}?"],
+                       f"Do {att} attacks affect {dfn} types?"],
                       f"No, {att} moves have no effect on {dfn} Pokemon.")
+        # "Is it immune?" flips the yes/no, so it needs its own answer.
+        c.qa_variants([f"Are {dfn} Pokemon immune to {att}?",
+                       f"Is {dfn} immune to {att}?"],
+                      f"Yes, {att} moves have no effect on {dfn} Pokemon.")
         defender_immune.setdefault(dfn, []).append(att)
     for dfn, atts in defender_immune.items():
         joined = " and ".join(atts) if len(atts) <= 2 else ", ".join(atts[:-1]) + ", and " + atts[-1]
         c.qa_variants([f"What are {dfn} Pokemon immune to?",
                        f"What moves do not affect {dfn} Pokemon?"],
                       f"{dfn} Pokemon are immune to {joined} moves.")
-    # Gen-1 Ghost-vs-Psychic glitch
-    c.qa_variants(["Can Ghost moves hit Psychic Pokemon?",
-                   "Are Psychic Pokemon immune to Ghost?",
-                   "What are Psychic Pokemon immune to?"],
+    # Gen-1 Ghost-vs-Psychic glitch: WHY that immunity exists. Its own
+    # questions — the immunity questions themselves are answered above.
+    c.qa_variants(["Why can't Ghost moves hit Psychic Pokemon?",
+                   "Why are Psychic Pokemon immune to Ghost?"],
                   "In Red and Blue, a glitch made Ghost moves have no effect on Psychic Pokemon.")
 
     # Locations
@@ -1212,12 +1222,13 @@ def main():
 
     # Items
     for name, fact in ITEMS:
-        c.qa_variants([f"What is a {name}?",
-                       f"What does a {name} do?",
-                       f"Tell me about the {name}.",
-                       f"What's a {name}?",
+        a_name = with_article(name)   # "an Antidote", "an S.S. Ticket"
+        c.qa_variants([f"Tell me about the {name}.",
                        f"What does the {name} do?",
-                       f"How do I use a {name}?"],
+                       f"What is {a_name}?",
+                       f"What does {a_name} do?",
+                       f"What's {a_name}?",
+                       f"How do I use {a_name}?"],
                       fact)
 
     # Item interactions: evolution stones (all derived from the table) ──────
@@ -1300,10 +1311,16 @@ def main():
     # many phrasings (TYPE_LIST_Q) for repeated exposure. Answer leads with the
     # count so it's useful even if cut short. (The old ctx=43 truncation worry is
     # gone: device context is now 128, so a full 9-name list fits comfortably.)
+    # The biggest types (Poison, Water: 30+ names) name the first 12 instead —
+    # a whole list would pass ~30 words, and a tiny model recalls a short list
+    # far more reliably.
     for t, names in type_to_names().items():
-        joined = ", ".join(names)
-        c.qa_variants([q.format(t=t) for q in TYPE_LIST_Q],
-                      f"There are {len(names)} {t}-type Kanto Pokemon: {joined}.")
+        if len(names) > 24:
+            answer = (f"There are {len(names)} {t}-type Kanto Pokemon, including "
+                      f"{', '.join(names[:12])}, and {len(names) - 12} more.")
+        else:
+            answer = f"There are {len(names)} {t}-type Kanto Pokemon: {', '.join(names)}."
+        c.qa_variants([q.format(t=t) for q in TYPE_LIST_Q], answer)
 
     # Mechanics / general
     for questions, answer in CAPABILITIES:
@@ -1418,7 +1435,7 @@ def main():
                if r else f"{t}-type Pokemon do not resist any attack type.")
         c.qa_variants([f"What does {t} resist?",
                        f"What is {t} resistant to?",
-                       f"What takes half damage as a {t} type?"], ans)
+                       f"What takes half damage as {with_article(t)} type?"], ans)
 
     # Dual-type combos ("which Pokemon are Water and Ice?").
     combos = {}
@@ -1458,9 +1475,13 @@ def main():
 
         # Whole-word special tokens: the 151 names, so each tokenizes atomically
         # (no partial-name fragments). Pass to a trainer with --special-tokens.
-        names = [name for _num, name, _types, _into in POKEMON]
+        # The tokenizer matches a special token even inside a longer word, so a
+        # word that starts with a name is listed too: "Hypnosis", or the name
+        # Hypno would cut it into "Hypno" + "sis".
+        names = [name for _num, name, _types, _into in POKEMON] + ["Hypnosis"]
         header = ("# Pokemon name tokens — keep each of the 151 names whole in the\n"
                   "# tokenizer so names can't be garbled into partial fragments.\n"
+                  "# Hypnosis is listed too, or the name Hypno would cut it apart.\n"
                   "# Pass to a trainer with:  --special-tokens training_data/pokemon_special_tokens.txt\n"
                   "# One token per line; blank lines and # comments are ignored.\n\n")
         args.tokens_out.write_text(header + "\n".join(names) + "\n", encoding="utf-8")

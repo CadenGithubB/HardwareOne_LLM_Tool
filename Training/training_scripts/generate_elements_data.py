@@ -288,7 +288,7 @@ def main():
             ans = list_answer(f"{fam_plural(fam).capitalize()} include", names)
         c.qa_variants([f"Which elements are {fam_plural(fam)}?",
                        f"Name some {fam_plural(fam)}.",
-                       f"Give me a {fam}.",
+                       f"Give me {fam_with_article(fam)}.",
                        f"What are the {fam_plural(fam)}?",
                        f"what are {fam_plural(fam)}?",
                        f"List the {fam_plural(fam)}.",
